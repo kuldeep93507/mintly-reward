@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: ludo-mintly-server
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: .
+    plan: starter # persistent disks need a paid plan
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: ludo-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: SERVER_SECRET
+        generateValue: true
+      - key: DATA_DIR
+        value: /data
+      - key: TURN_SECONDS
+        value: "15"
+      - key: BOT_FILL_SECONDS
+        value: "12"

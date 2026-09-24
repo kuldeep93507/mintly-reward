@@ -1,0 +1,24 @@
+{
+  "name": "@ludo/server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 --packages=external --alias:@ludo/engine=../engine/src/index.ts --outfile=dist/index.js",
+    "start": "node --disable-warning=ExperimentalWarning dist/index.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@ludo/engine": "1.0.0",
+    "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "esbuild": "^0.25.0",
+    "socket.io-client": "^4.8.3",
+    "tsx": "^4.20.0"
+  }
+}

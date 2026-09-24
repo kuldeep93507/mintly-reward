@@ -1,0 +1,11 @@
+**/node_modules
+**/dist
+server/data
+app/android
+app/ios
+.git
+docs
+test-results
+playwright-report
+*.log
+.env
