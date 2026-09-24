@@ -1,0 +1,25 @@
+:root {
+  --bg-1: #2a1c78;
+  --bg-2: #160f45;
+  --bg-3: #0d0930;
+  --panel: #33258f;
+  --panel-2: #4432b0;
+  --ink: #2a2250;
+  --white: #ffffff;
+  --muted: #b9b2ea;
+  --red: #e53935;
+  --green: #2e9e48;
+  --yellow: #f9c21a;
+  --blue: #1e7fe0;
+  --gold: #ffcc1e;
+  --gold-dark: #d99a00;
+  --purple: #8e4ff0;
+  --radius-s: 12px;
+  --radius: 18px;
+  --radius-l: 26px;
+  --shadow: 0 8px 24px rgba(5, 2, 30, 0.45);
+  --font-display: 'Baloo 2', 'Nunito', system-ui, sans-serif;
+  --font-body: 'Nunito', system-ui, sans-serif;
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+}
