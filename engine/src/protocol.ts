@@ -63,6 +63,7 @@ export interface LeaderboardEntry {
 // POST /api/free-coins   -> RewardResponse
 // GET  /api/leaderboard  -> { top: LeaderboardEntry[] }
 // GET  /api/config       -> ServerConfig
+// DELETE /api/me        -> { ok: true }  (permanently deletes the account)
 // GET  /health           -> { ok: true }
 // Errors: HTTP 4xx/5xx with { error: string }.
 
