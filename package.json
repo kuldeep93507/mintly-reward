@@ -1,0 +1,20 @@
+{
+  "name": "ludo-mintly",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Ludo Mintly - online multiplayer Ludo game (Android app + game server)",
+  "workspaces": ["engine", "server", "app"],
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "test": "npm run test -w engine && npm run test -w server",
+    "typecheck": "npm run typecheck -w engine && npm run typecheck -w server && npm run typecheck -w app",
+    "dev:server": "npm run dev -w server",
+    "dev:app": "npm run dev -w app",
+    "build:app": "npm run build -w app",
+    "build:server": "npm run build -w server"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.1"
+  }
+}
