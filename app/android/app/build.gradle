@@ -1,0 +1,91 @@
+apply plugin: 'com.android.application'
+
+// Release signing. Locally: create android/keystore.properties (see docs/PLAY_STORE.md).
+// In CI: LUDO_KEYSTORE_FILE, LUDO_KEYSTORE_PASSWORD, LUDO_KEY_ALIAS, LUDO_KEY_PASSWORD env vars.
+def keystoreProps = new Properties()
+def keystorePropsFile = rootProject.file('keystore.properties')
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+def signingValue = { String prop, String env -> keystoreProps.getProperty(prop) ?: System.getenv(env) }
+def releaseStoreFile = signingValue('storeFile', 'LUDO_KEYSTORE_FILE')
+def hasReleaseSigning = releaseStoreFile != null && file(releaseStoreFile).exists()
+
+// Bump versionCode for every Play Store upload (CI passes -PversionCode=<run number>).
+def appVersionCode = (project.findProperty('versionCode') ?: '1') as Integer
+def appVersionName = (project.findProperty('versionName') ?: '1.0.0') as String
+// Plain http:// game servers (LAN testing) are allowed in debug builds only,
+// unless you build release with -PallowCleartext=true.
+def releaseCleartext = (project.findProperty('allowCleartext') ?: 'false') as String
+
+android {
+    namespace = "com.mintly.ludo"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.mintly.ludo"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode appVersionCode
+        versionName appVersionName
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile file(releaseStoreFile)
+                storePassword signingValue('storePassword', 'LUDO_KEYSTORE_PASSWORD')
+                keyAlias signingValue('keyAlias', 'LUDO_KEY_ALIAS')
+                keyPassword signingValue('keyPassword', 'LUDO_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+            manifestPlaceholders = [usesCleartextTraffic: "true", appLabel: "Ludo Mintly (Test)"]
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            manifestPlaceholders = [usesCleartextTraffic: releaseCleartext, appLabel: "@string/app_name"]
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Ludo Mintly</string>
+    <string name="title_activity_main">Ludo Mintly</string>
+    <string name="package_name">com.mintly.ludo</string>
+    <string name="custom_url_scheme">com.mintly.ludo</string>
+</resources>

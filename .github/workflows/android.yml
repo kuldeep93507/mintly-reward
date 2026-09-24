@@ -1,0 +1,110 @@
+name: Build Android app
+
+# Builds on every push, or on demand from the Actions tab ("Run workflow").
+# Outputs (download from the run's Artifacts section):
+#   ludo-mintly-debug-apk      install directly on a phone for testing
+#   ludo-mintly-release-apk    release build (signed when the keystore secrets are set)
+#   ludo-mintly-release-aab    upload this to Google Play Console (needs the keystore secrets)
+#
+# Repository settings used:
+#   Variables: SERVER_URL                     public game server, e.g. https://ludo-mintly.onrender.com
+#   Secrets:   ANDROID_KEYSTORE_BASE64        base64 of your upload keystore (.jks)
+#              ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+# See docs/PLAY_STORE.md for how to create them.
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  workflow_dispatch:
+    inputs:
+      server_url:
+        description: 'Game server URL baked into the app (leave empty to use the SERVER_URL variable)'
+        required: false
+        default: ''
+      allow_cleartext:
+        description: 'Allow plain http:// servers in the release build (testing only)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  android:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      VITE_SERVER_URL: ${{ inputs.server_url || vars.SERVER_URL || 'http://10.0.2.2:3000' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app and sync into Android
+        working-directory: app
+        run: |
+          echo "Server URL: $VITE_SERVER_URL"
+          npm run build
+          npx cap sync android
+
+      - name: Restore release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+            echo "LUDO_KEYSTORE_FILE=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+            echo "Release signing: enabled"
+          else
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret - release APK/AAB will be unsigned (debug APK still works for testing)."
+          fi
+
+      - name: Gradle build
+        working-directory: app/android
+        env:
+          LUDO_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          LUDO_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          LUDO_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug assembleRelease bundleRelease \
+            -PversionCode=${{ github.run_number }} \
+            -PversionName=1.0.${{ github.run_number }} \
+            -PallowCleartext=${{ inputs.allow_cleartext && 'true' || 'false' }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ludo-mintly-debug-apk
+          path: app/android/app/build/outputs/apk/debug/*.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ludo-mintly-release-apk
+          path: app/android/app/build/outputs/apk/release/*.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ludo-mintly-release-aab
+          path: app/android/app/build/outputs/bundle/release/*.aab
