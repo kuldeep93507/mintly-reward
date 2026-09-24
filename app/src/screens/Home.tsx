@@ -26,6 +26,17 @@ export function Logo() {
   );
 }
 
+function SnakeLadderIcon() {
+  return (
+    <svg viewBox="0 0 48 48" width="44" height="44" aria-hidden>
+      <g stroke="#7a4a1e" strokeWidth="3" strokeLinecap="round"><path d="M12 44 L22 4 M24 44 L34 4" /></g>
+      <g stroke="#e0a868" strokeWidth="2.4" strokeLinecap="round"><path d="M14 36h11M16 28h11M18 20h11M20 12h11" /></g>
+      <path d="M40 6 C28 12 46 22 30 28 S30 40 12 42" fill="none" stroke="#2E9E48" strokeWidth="5" strokeLinecap="round" />
+      <circle cx="40" cy="6" r="4" fill="#2E9E48" /><circle cx="41" cy="5" r="1.2" fill="#fff" />
+    </svg>
+  );
+}
+
 const TILES = [
   { id: 'online', title: 'Play Online', sub: 'Win coins', cls: 'tile-online', icon: 'globe' },
   { id: 'friends', title: 'Play with Friends', sub: 'Private room', cls: 'tile-friends', icon: 'users' },
@@ -87,6 +98,12 @@ export function Home() {
         })}
       </div>
 
+      <button className="snakes-tile" onClick={() => { play('click'); app.go({ id: 'snakes-setup' }); }} data-testid="tile-snakes">
+        <span className="st-art"><SnakeLadderIcon /></span>
+        <span className="st-text"><b>Snakes &amp; Ladders</b><small>Classic board · 2-4 players</small></span>
+        <span className="st-go"><Icon name="back" size={20} className="flip" /></span>
+      </button>
+
       <div className="home-row">
         <button className="round-btn rb-daily" onClick={() => { play('click'); if (profile) app.setDailyOpen(true); else app.toast("Daily rewards need the game server"); }}>
           <span className="rb-icon"><Icon name="gift" size={28} /></span>
@@ -96,6 +113,10 @@ export function Home() {
         <button className="round-btn rb-board" onClick={() => { play('click'); app.go({ id: 'leaderboard' }); }}>
           <span className="rb-icon"><Icon name="trophy" size={28} /></span>
           <span className="rb-label">Leaders</span>
+        </button>
+        <button className="round-btn rb-themes" onClick={() => { play('click'); app.go({ id: 'themes' }); }} data-testid="themes">
+          <span className="rb-icon"><Icon name="brush" size={28} /></span>
+          <span className="rb-label">Themes</span>
         </button>
         <button className="round-btn rb-help" onClick={() => { play('click'); app.go({ id: 'howto' }); }}>
           <span className="rb-icon"><Icon name="book" size={28} /></span>

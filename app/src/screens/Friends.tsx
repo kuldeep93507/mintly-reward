@@ -9,6 +9,7 @@ import { Btn, Header, Modal, Segmented } from '../ui/kit';
 import { Icon } from '../ui/Icon';
 import { OfflineCard } from '../ui/Offline';
 import { play } from '../audio/sfx';
+import { InviteModal } from './Invite';
 
 type RoomAck = { ok: true; room: RoomInfo } | { ok: false; error: string };
 
@@ -96,6 +97,7 @@ export function Lobby({ room: initial }: { room: RoomInfo }) {
   const app = useApp();
   const [room, setRoom] = useState(initial);
   const [busy, setBusy] = useState(false);
+  const [inviting, setInviting] = useState(false);
   const me = app.profile?.id;
   const isHost = room.hostId === me;
 
@@ -136,7 +138,10 @@ export function Lobby({ room: initial }: { room: RoomInfo }) {
         <div className="rc-label">Room code</div>
         <div className="rc-code">{room.code.split('').map((d, i) => <span key={i}>{d}</span>)}</div>
         <div className="rc-meta">{room.maxPlayers} players · {room.stake ? <>Entry <Icon name="coin" size={16} /> {room.stake}</> : 'Free game'}</div>
-        <Btn variant="blue" onClick={share}><Icon name="share" /> Share code</Btn>
+        <div className="row-2">
+          <Btn variant="blue" onClick={share}><Icon name="share" /> Share</Btn>
+          <Btn variant="purple" onClick={() => setInviting(true)} data-testid="invite"><Icon name="users" /> Invite</Btn>
+        </div>
       </div>
       <div className="members">
         {Array.from({ length: room.maxPlayers }, (_, i) => {
@@ -156,6 +161,7 @@ export function Lobby({ room: initial }: { room: RoomInfo }) {
         </Btn>
       ) : <div className="lobby-wait">Waiting for the host to start…</div>}
       <Btn variant="white" onClick={leave}>Leave room</Btn>
+      {inviting && <InviteModal roomCode={room.code} onClose={() => setInviting(false)} />}
     </div>
   );
 }

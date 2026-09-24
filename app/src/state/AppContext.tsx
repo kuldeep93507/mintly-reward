@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { GameInfo, Profile, ServerConfig } from '@ludo/engine';
+import type { GameInfo, GlobalTheme, Invite, Profile, ServerConfig } from '@ludo/engine';
 import { DEFAULT_SERVER_URL } from '../config';
 import { api, setServer, setToken } from '../net/api';
 import { closeSocket, getSocket, type GameSocket } from '../net/socket';
@@ -8,7 +8,10 @@ import { setHapticsEnabled } from '../native/haptics';
 import { setSoundEnabled } from '../audio/sfx';
 import { hideSplash } from '../native/platform';
 import { OnlineGameController } from '../game/OnlineGameController';
-import type { LocalIdentity, PlayAgain, Screen, ServerStatus, Settings } from './types';
+import type { LocalIdentity, LocalTheme, PlayAgain, Screen, ServerStatus, Settings } from './types';
+import { applyOfflineDice, setOfflineSocket } from '../net/offlineLink';
+import { DEFAULT_THEME, ThemeContext, type ThemeChoice } from '../game/theme';
+import { notifyInvite } from '../native/notify';
 
 const DEFAULT_SETTINGS: Settings = { sound: true, vibration: true, autoMove: true, serverUrl: DEFAULT_SERVER_URL };
 
@@ -39,6 +42,14 @@ interface AppCtx {
   toast: (text: string) => void;
   dailyOpen: boolean;
   setDailyOpen: (o: boolean) => void;
+  /** Theme actually shown (owner's global theme wins over the player's choice). */
+  theme: ThemeChoice;
+  localTheme: LocalTheme;
+  setLocalTheme: (t: Partial<LocalTheme>) => void;
+  globalTheme: GlobalTheme | null;
+  /** Latest room invite waiting for Join / Decline. */
+  invite: Invite | null;
+  setInvite: (i: Invite | null) => void;
 }
 
 const Ctx = createContext<AppCtx>(null!);
@@ -60,6 +71,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [stack, setStack] = useState<Screen[]>([{ id: 'home' }]);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [dailyOpen, setDailyOpen] = useState(false);
+  const [localTheme, setLocalThemeState] = useState<LocalTheme>(DEFAULT_THEME);
+  const [globalTheme, setGlobalTheme] = useState<GlobalTheme | null>(null);
+  const [invite, setInvite] = useState<Invite | null>(null);
   const socketRef = useRef<GameSocket | null>(null);
   const deviceIdRef = useRef('');
   const stackRef = useRef(stack);
@@ -94,7 +108,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     socketRef.current = s;
     s.removeAllListeners('profile');
     s.removeAllListeners('game:start');
+    for (const ev of ['theme', 'broadcast', 'invite:received', 'offline:dice'] as const) s.removeAllListeners(ev);
     s.on('profile', (p) => setProfile(p));
+    s.on('theme', (t) => setGlobalTheme(t));
+    s.on('broadcast', (b) => toast(b.message));
+    s.on('offline:dice', applyOfflineDice);
+    s.on('invite:received', (i) => {
+      setInvite(i);
+      void notifyInvite(i);
+    });
+    setOfflineSocket(s);
     // A game started (matchmaking, a friends room, or a resend after reconnect).
     s.on('game:start', (info: GameInfo) => {
       const top = stackRef.current[stackRef.current.length - 1];
@@ -103,7 +126,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const again = pendingOnline.current;
       setStack((st) => [...st.filter((x) => x.id === 'home'), { id: 'game', controller: ctrl, again, info }]);
     });
-  }, [setProfile]);
+  }, [setProfile, toast]);
 
   const connect = useCallback(async (url: string) => {
     setServer(url);
@@ -113,7 +136,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const auth = await api.guest(deviceIdRef.current, ident.name, ident.avatar);
       setToken(auth.token);
       setProfile(auth.profile);
-      setConfig(await api.config());
+      const cfg = await api.config();
+      setConfig(cfg);
+      if (cfg.theme) setGlobalTheme(cfg.theme);
       attachSocket(url, auth.token);
       setStatus('online');
     } catch {
@@ -122,12 +147,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setToken(null);
       closeSocket();
       socketRef.current = null;
+      setOfflineSocket(null);
     }
   }, [attachSocket, setProfile]);
 
   // Boot: settings, identity, device id, then guest login.
   useEffect(() => {
     void (async () => {
+      setLocalThemeState(await getJSON<LocalTheme>('theme', DEFAULT_THEME));
       const s = await getJSON('settings', DEFAULT_SETTINGS);
       setSettings(s);
       setSoundEnabled(s.sound);
@@ -198,6 +225,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return null;
   }, [connect, settings.serverUrl]);
 
+  const setLocalTheme = useCallback((p: Partial<LocalTheme>) => {
+    setLocalThemeState((t) => {
+      const n = { ...t, ...p };
+      void setJSON('theme', n);
+      return n;
+    });
+  }, []);
+
+  const theme = useMemo<ThemeChoice>(() => {
+    const g = globalTheme;
+    if (!g) return localTheme;
+    return {
+      board: g.board ?? (g.locked ? DEFAULT_THEME.board : localTheme.board),
+      dice: g.dice ?? (g.locked ? DEFAULT_THEME.dice : localTheme.dice),
+    };
+  }, [globalTheme, localTheme]);
+
   const value = useMemo<AppCtx>(() => ({
     ready, settings, updateSettings, identity, profile, setProfile, updateIdentity, config, status,
     reconnect: () => connect(settings.serverUrl),
@@ -206,7 +250,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     screen, go, replace, back, home,
     setPendingOnline: (a) => { pendingOnline.current = a; },
     toasts, toast, dailyOpen, setDailyOpen,
-  }), [ready, settings, updateSettings, identity, profile, setProfile, updateIdentity, config, status, connect, deleteAccount, screen, go, replace, back, home, toasts, toast, dailyOpen]);
+    theme, localTheme, setLocalTheme, globalTheme, invite, setInvite,
+  }), [ready, settings, updateSettings, identity, profile, setProfile, updateIdentity, config, status, connect, deleteAccount, screen, go, replace, back, home, toasts, toast, dailyOpen, theme, localTheme, setLocalTheme, globalTheme, invite]);
 
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={value}><ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider></Ctx.Provider>;
 }

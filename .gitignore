@@ -20,3 +20,12 @@ app/android/app/src/main/assets/capacitor.config.json
 app/android/app/src/main/assets/capacitor.plugins.json
 test-results/
 playwright-report/
+admin/android/app/build/
+admin/android/build/
+admin/android/.gradle/
+admin/android/local.properties
+admin/android/app/src/main/assets/public/
+admin/android/capacitor-cordova-android-plugins/
+admin/android/app/src/main/res/xml/config.xml
+admin/android/app/src/main/assets/capacitor.config.json
+admin/android/app/src/main/assets/capacitor.plugins.json

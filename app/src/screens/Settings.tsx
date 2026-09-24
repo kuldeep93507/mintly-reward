@@ -48,6 +48,10 @@ export function SettingsScreen() {
         </div>
 
         <div className="card">
+          <button className="link-row" onClick={() => app.go({ id: 'themes' })}>Themes <Icon name="back" size={16} className="flip" /></button>
+        </div>
+
+        <div className="card">
           <a className="link-row" href={PRIVACY_POLICY_URL} target="_blank" rel="noreferrer">Privacy Policy <Icon name="back" size={16} className="flip" /></a>
           <div className="link-row muted">Version <span>{APP_VERSION}</span></div>
         </div>

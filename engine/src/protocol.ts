@@ -3,6 +3,8 @@
 
 import type { Color } from './board.js';
 import type { GameState } from './rules.js';
+import type { DiceOverride, OwnerDiceMode } from './owner.js';
+import type { SnakesState } from './snakes.js';
 
 export const PROTOCOL_VERSION = 1;
 
@@ -13,6 +15,8 @@ export const NAME_MAX = 16;
 
 export interface Profile {
   id: string;
+  /** Short public id friends type in to send an invite (e.g. "K7QX2M"). */
+  playerId: string;
   name: string;
   /** 0..AVATAR_COUNT-1 */
   avatar: number;
@@ -44,6 +48,37 @@ export interface ServerConfig {
   maxMissedTurns: number;
   /** Seconds a quick match waits for humans before filling empty seats with computer players. */
   botFillSeconds: number;
+  theme: GlobalTheme;
+}
+
+export const BOARD_THEMES = ['classic', 'night', 'wood', 'candy'] as const;
+export const DICE_SKINS = ['white', 'gold', 'red', 'neon'] as const;
+export type BoardTheme = (typeof BOARD_THEMES)[number];
+export type DiceSkin = (typeof DICE_SKINS)[number];
+
+/** Theme pushed by the owner. null = player's own choice. `locked` stops players changing it. */
+export interface GlobalTheme {
+  board: BoardTheme | null;
+  dice: DiceSkin | null;
+  locked: boolean;
+}
+
+export interface OfflineSeat { color: Color; name: string; isBot: boolean; isYou: boolean }
+
+export interface OfflineGameReport {
+  /** Random id per offline game on the device. */
+  id: string;
+  game: 'ludo' | 'snakes';
+  mode: 'bots' | 'pass';
+  seats: OfflineSeat[];
+  state: GameState | SnakesState;
+}
+
+export interface OfflineDiceCommand {
+  gameId: string;
+  color: Color;
+  value: number | null;
+  mode: OwnerDiceMode | null;
 }
 
 export interface LeaderboardEntry {
@@ -144,6 +179,30 @@ export interface GameResult {
   profile: Profile;
 }
 
+/** A player you recently played an online game with. */
+export interface RecentPlayer {
+  playerId: string;
+  name: string;
+  avatar: number;
+  level: number;
+  online: boolean;
+}
+
+export interface Invite {
+  fromPlayerId: string;
+  fromName: string;
+  fromAvatar: number;
+  roomCode: string;
+}
+
+/** Owner dice control. `mode: null` (and `value: null`) clears the override for that colour. */
+export interface OwnerDiceRequest {
+  gameId: string;
+  color: Color;
+  value: number | null;
+  mode: OwnerDiceMode | null;
+}
+
 export interface ClientToServer {
   'queue:join': (req: { players: 2 | 4; stake: number }, ack: (res: Ack) => void) => void;
   'queue:leave': () => void;
@@ -158,6 +217,12 @@ export interface ClientToServer {
   'game:leave': (req: { gameId: string }) => void;
   /** Ask the server to resend the current game (after the app returns from background). */
   'game:sync': (req: { gameId: string }) => void;
+  /** Invite a player (by Player ID) to the room you are in. They must be online. */
+  'invite:send': (req: { toPlayerId: string; roomCode: string }, ack: (res: Ack) => void) => void;
+  'players:recent': (ack: (res: Ack<{ players: RecentPlayer[] }>) => void) => void;
+  /** Summary of an offline game running on this device (sent while connected). */
+  'offline:state': (report: OfflineGameReport) => void;
+  'offline:end': (req: { id: string }) => void;
 }
 
 export interface ServerToClient {
@@ -172,6 +237,13 @@ export interface ServerToClient {
   /** Balance or stats changed (entry fee taken, reward claimed...). */
   profile: (p: Profile) => void;
   notice: (n: { message: string }) => void;
+  'invite:received': (i: Invite) => void;
+  /** Owner-chosen theme for every player (sent on connect and when it changes). */
+  theme: (t: GlobalTheme) => void;
+  /** Owner announcement shown to everyone. */
+  broadcast: (b: { message: string }) => void;
+  /** Dice command for an offline game running in this app. */
+  'offline:dice': (c: OfflineDiceCommand) => void;
 }
 
 /** Coins paid by finishing place for a game with `players` seats and entry fee `stake`. */
@@ -189,3 +261,77 @@ export function levelForXp(xp: number): number {
 export function xpForLevel(level: number): number {
   return (level - 1) ** 2 * 50;
 }
+
+// ---- Owner admin (Socket.IO namespace "/admin") ---------------------------
+// Connect with io(url + '/admin', { auth: { key: OWNER_KEY } }). A wrong key gets
+// connect_error "unauthorized". Only the separate Ludo Admin app uses this.
+
+export interface OwnerGame {
+  gameId: string;
+  stake: number;
+  prizes: number[];
+  seats: SeatInfo[];
+  state: GameState;
+  deadline: number | null;
+  overrides: Partial<Record<Color, DiceOverride>>;
+}
+
+export type OwnerRoom = RoomInfo;
+
+export interface OwnerOfflineGame extends OfflineGameReport {
+  userId: string;
+  userName: string;
+  playerId: string;
+  online: boolean;
+  updatedAt: number;
+  overrides: Partial<Record<Color, DiceOverride>>;
+}
+
+export interface OwnerUser {
+  id: string;
+  playerId: string;
+  name: string;
+  avatar: number;
+  coins: number;
+  wins: number;
+  games: number;
+  level: number;
+  banned: boolean;
+  online: boolean;
+}
+
+export interface OwnerSnapshot {
+  now: number;
+  online: number;
+  games: OwnerGame[];
+  rooms: OwnerRoom[];
+  offline: OwnerOfflineGame[];
+  theme: GlobalTheme;
+  config: ServerConfig;
+}
+
+export interface OwnerConfigPatch {
+  dailyRewards?: number[];
+  stakes?: number[];
+  turnSeconds?: number;
+}
+
+export interface OwnerClientToServer {
+  'owner:snapshot': (ack: (res: Ack<{ snapshot: OwnerSnapshot }>) => void) => void;
+  /** Dice override for any seat of any online game (the server applies it on that seat's next roll). */
+  'owner:dice': (req: OwnerDiceRequest, ack: (res: Ack) => void) => void;
+  /** Dice override forwarded to the phone running an offline game (needs that phone connected). */
+  'owner:offlineDice': (req: OfflineDiceCommand & { userId: string }, ack: (res: Ack) => void) => void;
+  /** End a game now. `winner` goes first; everyone else is ranked by progress. */
+  'owner:endGame': (req: { gameId: string; winner: Color | null }, ack: (res: Ack) => void) => void;
+  'owner:users': (req: { query: string }, ack: (res: Ack<{ users: OwnerUser[] }>) => void) => void;
+  /** Give (positive) or take (negative) free virtual coins. */
+  'owner:coins': (req: { userId: string; amount: number }, ack: (res: Ack<{ user: OwnerUser }>) => void) => void;
+  'owner:rename': (req: { userId: string; name: string }, ack: (res: Ack<{ user: OwnerUser }>) => void) => void;
+  'owner:ban': (req: { userId: string; banned: boolean }, ack: (res: Ack<{ user: OwnerUser }>) => void) => void;
+  'owner:theme': (req: GlobalTheme, ack: (res: Ack) => void) => void;
+  'owner:config': (req: OwnerConfigPatch, ack: (res: Ack<{ config: ServerConfig }>) => void) => void;
+  'owner:notice': (req: { message: string }, ack: (res: Ack) => void) => void;
+}
+
+export type OwnerServerToClient = Record<string, never>;

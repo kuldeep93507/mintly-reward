@@ -39,6 +39,11 @@ export function ProfileScreen() {
           <Icon name="edit" size={18} />
           <input value={name} maxLength={NAME_MAX} onChange={(e) => setName(e.target.value)} aria-label="Name" />
         </label>
+        {profile?.playerId && (
+          <button className="pid-chip" onClick={() => { void navigator.clipboard?.writeText(profile.playerId).catch(() => {}); app.toast('Player ID copied'); }} data-testid="player-id">
+            Player ID <b>{profile.playerId}</b>
+          </button>
+        )}
         <div className="xp">
           <div className="xp-top"><span>Level {level}</span><span>{xp - lo} / {hi - lo} XP</span></div>
           <div className="xp-bar"><div style={{ width: `${pct}%` }} /></div>

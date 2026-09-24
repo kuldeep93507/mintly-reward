@@ -1,6 +1,7 @@
 import {
-  type BotLevel, type Color, type GameState, applyMove, applyRoll, chooseMove, currentPlayer, legalTokens, newGame, rollDie,
+  type BotLevel, type Color, type GameState, applyMove, applyRoll, chooseMove, currentPlayer, legalTokens, newGame, overrideValue, rollDie,
 } from '@ludo/engine';
+import { endOffline, offlineId, reportOffline, takeOfflineDice } from '../net/offlineLink';
 import { speed } from '../config';
 import type { GameController, GameOutcome, SeatView, Snapshot } from './controller';
 import { Emitter } from './emitter';
@@ -31,8 +32,9 @@ export class LocalGameController implements GameController {
   private over = new Emitter<GameOutcome>();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
+  readonly id = offlineId();
 
-  constructor(seats: LocalSeat[], you: Color | null) {
+  constructor(seats: LocalSeat[], you: Color | null, private mode: 'bots' | 'pass' = you ? 'bots' : 'pass') {
     this.you = you;
     this.state = newGame(seats.map((s) => s.color));
     this.seats = seats.map((s) => ({
@@ -40,6 +42,15 @@ export class LocalGameController implements GameController {
       controllable: !s.bot, isYou: s.isYou, connected: true,
     }));
     for (const s of seats) if (s.bot) this.bots.set(s.color, s.bot);
+    this.report();
+  }
+
+  private report() {
+    if (this.state.phase === 'over') { endOffline(this.id); return; }
+    reportOffline({
+      id: this.id, game: 'ludo', mode: this.mode, state: this.state,
+      seats: this.seats.map((s) => ({ color: s.color, name: s.name, isBot: s.isBot, isYou: s.isYou })),
+    });
   }
 
   snapshot(): Snapshot {
@@ -52,6 +63,7 @@ export class LocalGameController implements GameController {
 
   private set(next: GameState) {
     this.state = next;
+    this.report();
     this.updates.emit(this.snapshot());
     if (next.phase === 'over') {
       this.over.emit({ ranking: next.ranking, seats: this.seats, you: this.you, online: false, stake: 0 });
@@ -65,7 +77,8 @@ export class LocalGameController implements GameController {
 
   roll() {
     if (this.disposed || this.state.phase !== 'roll') return;
-    this.set(applyRoll(this.state, rollDie()));
+    const color = currentPlayer(this.state).color;
+    this.set(applyRoll(this.state, overrideValue(this.state, takeOfflineDice(this.id, color)) ?? rollDie()));
   }
 
   move(token: number) {
@@ -94,6 +107,7 @@ export class LocalGameController implements GameController {
 
   dispose() {
     this.disposed = true;
+    endOffline(this.id);
     if (this.timer) clearTimeout(this.timer);
     this.updates.clear();
     this.over.clear();

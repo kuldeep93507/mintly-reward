@@ -6,7 +6,10 @@ import { Confirm } from './ui/kit';
 import { Home } from './screens/Home';
 import { OnlineScreen, Matchmaking } from './screens/Online';
 import { FriendsScreen, Lobby } from './screens/Friends';
-import { BotsSetupScreen, PassSetupScreen } from './screens/Setup';
+import { BotsSetupScreen, PassSetupScreen, SnakesSetupScreen } from './screens/Setup';
+import { SnakesScreen } from './snakes/SnakesScreen';
+import { ThemesScreen } from './screens/Themes';
+import { InvitePopup } from './screens/Invite';
 import { ResultScreen } from './screens/Result';
 import { ProfileScreen } from './screens/Profile';
 import { LeaderboardScreen } from './screens/Leaderboard';
@@ -33,6 +36,9 @@ function Screens() {
     case 'leaderboard': return <LeaderboardScreen />;
     case 'settings': return <SettingsScreen />;
     case 'howto': return <HowToScreen />;
+    case 'themes': return <ThemesScreen />;
+    case 'snakes-setup': return <SnakesSetupScreen />;
+    case 'snakes': return <SnakesScreen controller={s.controller} again={s.again} />;
   }
 }
 
@@ -46,6 +52,7 @@ function Shell() {
   useEffect(() => onBackButton(() => {
     const a = ref.current;
     if (a.dailyOpen) { a.setDailyOpen(false); return; }
+    if (a.invite) { a.setInvite(null); return; }
     const o = getBackOverride();
     if (o) { o(); return; }
     if (a.screen.id === 'home') setAskExit(true);
@@ -57,11 +64,12 @@ function Shell() {
     return <div className="screen boot"><Logo /><span className="spinner" /></div>;
   }
   // Keying by screen id replays the enter animation on navigation.
-  const key = app.screen.id === 'game' ? 'game' + (app.screen.info?.gameId ?? '') : app.screen.id;
+  const key = app.screen.id === 'game' ? 'game' + (app.screen.info?.gameId ?? '') : app.screen.id === 'snakes' ? 'snakes' + app.screen.controller.id : app.screen.id;
   return (
     <>
       <div className="screen-wrap" key={key}><Screens /></div>
       {app.dailyOpen && <DailyModal />}
+      {app.invite && <InvitePopup />}
       <div className="toasts">{app.toasts.map((t) => <div key={t.id} className="toast">{t.text}</div>)}</div>
       {askExit && <Confirm title="Exit Ludo Mintly?" text="See you soon!" yes="Exit" onYes={exitApp} onNo={() => setAskExit(false)} />}
     </>

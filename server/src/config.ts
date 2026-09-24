@@ -1,4 +1,5 @@
 import { randomInt } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 export interface Config {
   port: number;
@@ -7,6 +8,10 @@ export interface Config {
   /** ':memory:' for tests. */
   dbFile?: string;
   secret?: string;
+  /** Built Ludo Admin app served at /admin/ (ADMIN_DIR, default ../admin/dist next to the server package). */
+  adminDir: string;
+  /** Owner key for dice control (OWNER_KEY). Generated and saved in DATA_DIR/owner-key when unset. */
+  ownerKey?: string;
   turnSeconds: number;
   /** Extra time added to each turn deadline for client animations. */
   animGraceMs: number;
@@ -49,6 +54,8 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
     host: process.env.HOST || '0.0.0.0',
     dataDir: process.env.DATA_DIR || './data',
     secret: process.env.SERVER_SECRET || undefined,
+    ownerKey: process.env.OWNER_KEY || undefined,
+    adminDir: process.env.ADMIN_DIR || fileURLToPath(new URL('../../admin/dist', import.meta.url)),
     turnSeconds: num('TURN_SECONDS', 15),
     animGraceMs: num('ANIM_GRACE_MS', 1500),
     botFillSeconds: num('BOT_FILL_SECONDS', 12),

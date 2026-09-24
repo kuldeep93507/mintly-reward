@@ -1,6 +1,6 @@
 import {
-  type Color, type GameInfo, type GameState, type GameUpdate, type SeatInfo,
-  applyLeave, applyMove, applyRoll, chooseMove, currentPlayer, newGame, prizeTable,
+  type Color, type DiceOverride, type GameInfo, type GameState, type GameUpdate, type SeatInfo,
+  applyLeave, applyMove, applyRoll, chooseMove, currentPlayer, newGame, overrideValue, prizeTable,
 } from '@ludo/engine';
 import type { Hub } from './hub.js';
 import { UserError } from './errors.js';
@@ -12,6 +12,8 @@ export class GameSession {
   deadline: number | null = null;
   over = false;
   private timer: NodeJS.Timeout | null = null;
+  /** Owner dice overrides per colour. Server-only: never part of any update sent to clients. */
+  private diceOverrides = new Map<Color, DiceOverride>();
 
   constructor(
     private hub: Hub,
@@ -93,6 +95,48 @@ export class GameSession {
     }
   }
 
+  /** Owner control: set (or clear with null) the dice override for a colour. */
+  setDiceOverride(color: Color, o: DiceOverride | null): void {
+    if (!this.seats.some((s) => s.color === color)) throw new UserError('No such seat');
+    if (o) this.diceOverrides.set(color, o); else this.diceOverrides.delete(color);
+  }
+
+  overridesView(): Partial<Record<Color, DiceOverride>> {
+    return Object.fromEntries(this.diceOverrides);
+  }
+
+  /**
+   * Owner: end the game now. `winner` (if given) is ranked first, then players who already
+   * finished, then the rest by progress; players who left stay last and forfeit prizes.
+   */
+  forceEnd(winner: Color | null): void {
+    if (this.over || this.state.phase === 'over') throw new UserError('Game is over');
+    const s: GameState = { ...this.state, players: this.state.players.map((p) => ({ ...p, tokens: p.tokens.slice() })), ranking: this.state.ranking.slice() };
+    if (winner && !s.players.some((p) => p.color === winner && !p.out)) throw new UserError('That player is not in the game');
+    const progress = (p: GameState['players'][number]) => p.tokens.reduce((a, t) => a + t + 1, 0);
+    const racing = s.players.filter((p) => !p.out && p.rank === null).sort((a, b) => progress(b) - progress(a));
+    const leavers = s.players.filter((p) => p.out && p.rank === null).reverse();
+    let ranking = [...s.ranking, ...racing.map((p) => p.color), ...leavers.map((p) => p.color)];
+    if (winner) ranking = [winner, ...ranking.filter((c) => c !== winner)];
+    s.ranking = ranking;
+    for (const p of s.players) p.rank = ranking.indexOf(p.color) + 1;
+    s.phase = 'over';
+    s.dice = null;
+    s.seq++;
+    s.last = { type: 'start' };
+    this.hub.cfg.log('game', this.id, 'ended by owner', winner ?? '');
+    this.commit(s);
+  }
+
+  /** The dice for the player about to roll: an owner override if set, otherwise the normal dice. */
+  private rollValue(): number {
+    const color = currentPlayer(this.state).color;
+    const o = this.diceOverrides.get(color);
+    const v = overrideValue(this.state, o);
+    if (o?.mode === 'once') this.diceOverrides.delete(color);
+    return v ?? this.hub.cfg.rollDie();
+  }
+
   private safe(fn: () => void): void {
     this.timer = null;
     if (this.over || this.hub.closed) return;
@@ -100,14 +144,14 @@ export class GameSession {
   }
 
   private botStep(): void {
-    if (this.state.phase === 'roll') this.commit(applyRoll(this.state, this.hub.cfg.rollDie()));
+    if (this.state.phase === 'roll') this.commit(applyRoll(this.state, this.rollValue()));
     else if (this.state.phase === 'move') this.commit(applyMove(this.state, chooseMove(this.state, 'normal')));
   }
 
   private timeout(color: Color): void {
     if (currentPlayer(this.state).color !== color) return this.arm();
     let s = this.state;
-    if (s.phase === 'roll') s = applyRoll(s, this.hub.cfg.rollDie());
+    if (s.phase === 'roll') s = applyRoll(s, this.rollValue());
     if (s.phase === 'move' && currentPlayer(s).color === color) s = applyMove(s, chooseMove(s, 'normal'));
     const missed = (this.missed[color] ?? 0) + 1;
     this.missed = { ...this.missed, [color]: missed };
@@ -127,7 +171,7 @@ export class GameSession {
     const seat = this.seatOf(userId);
     if (!seat) throw new UserError('You are not in this game');
     if (this.current().userId !== userId) throw new UserError('Not your turn');
-    const next = action.type === 'roll' ? applyRoll(this.state, this.hub.cfg.rollDie()) : applyMove(this.state, action.token);
+    const next = action.type === 'roll' ? applyRoll(this.state, this.rollValue()) : applyMove(this.state, action.token);
     if (this.missed[seat.color]) this.missed = { ...this.missed, [seat.color]: 0 };
     this.commit(next);
   }

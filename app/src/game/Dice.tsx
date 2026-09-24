@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useDiceLook } from './theme';
 
 const PIPS: Record<number, [number, number][]> = {
   1: [[50, 50]],
@@ -10,13 +11,15 @@ const PIPS: Record<number, [number, number][]> = {
 };
 
 export function DiceFace({ value }: { value: number }) {
+  const look = useDiceLook();
   return (
-    <svg viewBox="0 0 100 100" className="dice-face" aria-label={`Dice ${value}`}>
-      <rect x="4" y="9" width="92" height="87" rx="22" fill="#A9A2CF" />
-      <rect x="4" y="4" width="92" height="86" rx="22" fill="#FFFFFF" />
-      <rect x="10" y="8" width="80" height="30" rx="15" fill="#fff" opacity="0.6" />
-      {PIPS[value].map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y - 3} r={value === 1 ? 13 : 9.5} fill={value === 1 ? '#E53935' : '#2A2250'} />
+    <svg viewBox="0 0 100 100" className="dice-face" aria-label={`Dice ${value}`}
+      style={look.glow ? { filter: `drop-shadow(0 0 5px ${look.glow})` } : undefined}>
+      <rect x="4" y="9" width="92" height="87" rx="22" fill={look.shade} />
+      <rect x="4" y="4" width="92" height="86" rx="22" fill={look.body} stroke={look.glow} strokeWidth={look.glow ? 3 : 0} />
+      <rect x="10" y="8" width="80" height="30" rx="15" fill="#fff" opacity={look.glow ? 0.08 : 0.6} />
+      {(PIPS[value] ?? PIPS[1]).map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y - 3} r={value === 1 ? 13 : 9.5} fill={value === 1 ? look.one : look.pip} />
       ))}
     </svg>
   );

@@ -1,4 +1,5 @@
-import type { BotLevel, Color, GameInfo, RoomInfo } from '@ludo/engine';
+import type { BoardTheme, BotLevel, Color, DiceSkin, GameInfo, RoomInfo } from '@ludo/engine';
+import type { SnakesController } from '../snakes/SnakesController';
 import type { GameController, GameOutcome } from '../game/controller';
 
 export interface Settings {
@@ -17,7 +18,11 @@ export interface BotsSetup { kind: 'bots'; players: 2 | 3 | 4; color: Color; lev
 export interface PassSetup { kind: 'pass'; names: string[] }
 export interface OnlineSetup { kind: 'online'; players: 2 | 4; stake: number }
 export interface RoomSetup { kind: 'room' }
-export type PlayAgain = BotsSetup | PassSetup | OnlineSetup | RoomSetup;
+export interface SnakesSetup { kind: 'snakes'; mode: 'bots' | 'pass'; names: string[] }
+export type PlayAgain = BotsSetup | PassSetup | OnlineSetup | RoomSetup | SnakesSetup;
+
+/** The player's own look (may be overridden by the owner's global theme). */
+export interface LocalTheme { board: BoardTheme; dice: DiceSkin }
 
 export type Screen =
   | { id: 'home' }
@@ -32,6 +37,9 @@ export type Screen =
   | { id: 'profile' }
   | { id: 'leaderboard' }
   | { id: 'settings' }
-  | { id: 'howto' };
+  | { id: 'howto' }
+  | { id: 'themes' }
+  | { id: 'snakes-setup' }
+  | { id: 'snakes'; controller: SnakesController; again: SnakesSetup };
 
 export type ServerStatus = 'connecting' | 'online' | 'offline';

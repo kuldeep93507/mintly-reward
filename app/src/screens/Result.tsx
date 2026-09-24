@@ -3,6 +3,7 @@ import { useApp } from '../state/AppContext';
 import type { GameOutcome } from '../game/controller';
 import type { PlayAgain } from '../state/types';
 import { startBotsGame, startPassGame } from '../game/startLocal';
+import { startSnakesGame } from '../snakes/SnakesController';
 import { Avatar } from '../ui/Avatar';
 import { Btn, ordinal } from '../ui/kit';
 import { Icon } from '../ui/Icon';
@@ -34,6 +35,7 @@ export function ResultScreen({ outcome, again }: { outcome: GameOutcome; again: 
   const playAgain = () => {
     if (again.kind === 'bots') app.replace({ id: 'game', controller: startBotsGame(again, app.identity, app.profile?.level ?? null), again });
     else if (again.kind === 'pass') app.replace({ id: 'game', controller: startPassGame(again), again });
+    else if (again.kind === 'snakes') app.replace({ id: 'snakes', controller: startSnakesGame(again, app.identity), again });
     else if (again.kind === 'online') {
       if ((app.profile?.coins ?? 0) < again.stake) { app.toast('Not enough coins for this table'); app.replace({ id: 'online' }); }
       else app.replace({ id: 'matchmaking', players: again.players, stake: again.stake });

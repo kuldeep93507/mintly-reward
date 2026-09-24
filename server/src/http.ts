@@ -1,5 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { PROTOCOL_VERSION, type ServerConfig } from '@ludo/engine';
+import { readFile, stat } from 'node:fs/promises';
+import { extname, join, normalize, resolve, sep } from 'node:path';
+import { PROTOCOL_VERSION, type GlobalTheme, type ServerConfig } from '@ludo/engine';
 import type { Config } from './config.js';
 import type { Db } from './db.js';
 import type { Auth } from './auth.js';
@@ -38,7 +40,7 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
   return v as Record<string, unknown>;
 }
 
-export function serverConfig(cfg: Config): ServerConfig {
+export function serverConfig(cfg: Config, db: Db): ServerConfig {
   return {
     protocol: PROTOCOL_VERSION,
     stakes: cfg.stakes,
@@ -50,7 +52,41 @@ export function serverConfig(cfg: Config): ServerConfig {
     freeCoinsCooldownMinutes: cfg.freeCoinsCooldownMinutes,
     maxMissedTurns: cfg.maxMissedTurns,
     botFillSeconds: cfg.botFillSeconds,
+    theme: db.getSetting<GlobalTheme>('theme') ?? { board: null, dice: null, locked: false },
   };
+}
+
+const TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json', '.woff2': 'font/woff2', '.woff': 'font/woff',
+};
+
+/** Static files of the Ludo Admin app (admin/dist) under /admin/. */
+async function serveAdmin(cfg: Config, raw: string, res: ServerResponse): Promise<void> {
+  if (raw === '/admin') {
+    res.writeHead(301, { Location: '/admin/' });
+    res.end();
+    return;
+  }
+  const root = resolve(cfg.adminDir);
+  let rel: string;
+  try { rel = decodeURIComponent(raw.slice('/admin/'.length)) || 'index.html'; } catch { throw new HttpError(400, 'Bad path'); }
+  let file = resolve(root, normalize(rel));
+  if (file !== root && !file.startsWith(root + sep)) throw new HttpError(404, 'Not found');
+  try {
+    if (!(await stat(file)).isFile()) file = join(root, 'index.html');
+  } catch {
+    file = join(root, 'index.html');
+  }
+  let data: Buffer;
+  try { data = await readFile(file); } catch { throw new HttpError(404, 'Admin app not built (run npm run build -w server)'); }
+  const hashed = file.includes(`${sep}assets${sep}`);
+  res.writeHead(200, {
+    'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream',
+    'Content-Length': data.length,
+    'Cache-Control': hashed ? 'public, max-age=31536000, immutable' : 'no-cache',
+  });
+  res.end(data);
 }
 
 export function createHandler(d: HttpDeps) {
@@ -61,18 +97,21 @@ export function createHandler(d: HttpDeps) {
     const m = typeof h === 'string' ? /^Bearer\s+(.+)$/i.exec(h) : null;
     const id = m ? auth.verify(m[1].trim()) : null;
     if (!id || !db.getUser(id)) throw new HttpError(401, 'unauthorized');
+    if (db.getUser(id)!.banned) throw new HttpError(403, 'This account is banned');
     return id;
   }
 
   async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    const path = new URL(req.url ?? '/', 'http://x').pathname.replace(/\/+$/, '') || '/';
+    const raw = new URL(req.url ?? '/', 'http://x').pathname;
+    if (req.method === 'GET' && (raw === '/admin' || raw.startsWith('/admin/'))) return serveAdmin(cfg, raw, res);
+    const path = raw.replace(/\/+$/, '') || '/';
     const key = `${req.method} ${path}`;
     switch (key) {
       case 'GET /':
       case 'GET /health':
         return send(res, 200, { ok: true });
       case 'GET /api/config':
-        return send(res, 200, serverConfig(cfg));
+        return send(res, 200, serverConfig(cfg, db));
       case 'POST /api/auth/guest': {
         const body = await readJson(req);
         const deviceId = body.deviceId;
@@ -91,6 +130,7 @@ export function createHandler(d: HttpDeps) {
             if (!u) throw new HttpError(500, 'Could not create user');
           }
         }
+        if (u.banned) throw new HttpError(403, 'This account is banned');
         return send(res, 200, { token: auth.sign(u.id), profile: db.profile(u) });
       }
       case 'GET /api/me': {

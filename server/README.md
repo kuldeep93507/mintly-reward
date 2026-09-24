@@ -20,7 +20,11 @@ Production build: `npm run build -w server && npm start -w server` (runs `server
 Tests: `npm test -w server`. Type check: `npm run typecheck -w server`.
 
 Data is stored in `server/data/ludo.db` (SQLite, WAL) plus `server/data/secret`
-(auto-generated token secret when `SERVER_SECRET` is not set). Delete the folder to reset.
+(auto-generated token secret when `SERVER_SECRET` is not set) and `server/data/owner-key`
+(auto-generated owner key when `OWNER_KEY` is not set). Delete the folder to reset.
+
+`npm run build -w server` also builds the **Ludo Admin** owner app (`admin/`) into `admin/dist`, which the
+server serves at `http://<server>/admin/`. Use `npm run build:server-only -w server` to skip it.
 
 ## Play from a phone on the same Wi-Fi
 
@@ -42,6 +46,8 @@ public **https** URL. `localhost`/LAN addresses are only for testing.
 | `HOST` | `0.0.0.0` | Bind address |
 | `DATA_DIR` | `./data` | Folder for `ludo.db` and `secret` |
 | `SERVER_SECRET` | generated, saved in `DATA_DIR/secret` | HMAC key for auth tokens. Changing it logs everyone out (accounts are kept). |
+| `OWNER_KEY` | generated, saved in `DATA_DIR/owner-key` and printed in the log at startup | Login key for the **Ludo Admin** app (`/admin/` or the admin APK). Anyone with it controls the server — keep it private. See `docs/ADMIN.md`. |
+| `ADMIN_DIR` | `../admin/dist` (next to the server package) | Built Ludo Admin files served at `/admin/` |
 | `TURN_SECONDS` | `15` | Time per turn before the server auto-plays it |
 | `ANIM_GRACE_MS` | `1500` | Extra time added to each turn deadline for animations |
 | `BOT_FILL_SECONDS` | `12` | Quick-match wait before computer players fill empty seats |
@@ -63,7 +69,14 @@ REST (JSON, CORS open to any origin): see `engine/src/protocol.ts`.
   queue/room, forfeits a running game, disconnects their sockets and permanently deletes the user row and
   their coin history. Returns `{ "ok": true }`. Logging in again with the same deviceId creates a brand-new account.
 
-Socket.IO: connect with `io(url, { auth: { token } })`; events per `ClientToServer` / `ServerToClient`.
+Socket.IO: connect with `io(url, { auth: { token } })`; events per `ClientToServer` / `ServerToClient`
+(includes `invite:send`, `players:recent`, `invite:received`, `theme`, `broadcast`, `offline:state` / `offline:dice`).
+
+Owner control: the separate Socket.IO namespace `/admin`, `io(url + '/admin', { auth: { key: OWNER_KEY } })`,
+events per `OwnerClientToServer` in `engine/src/protocol.ts` (live games/rooms snapshot, dice overrides, end game /
+declare winner, give/take coins, rename/ban users, global theme, config, broadcast notice). A wrong key gets
+`connect_error: unauthorized` (10 failed attempts per minute per IP, then blocked for the rest of that minute).
+Nothing from this namespace is ever sent to players. `GET /admin/` serves the Ludo Admin web app.
 
 ## Deploy publicly
 

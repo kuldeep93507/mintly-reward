@@ -14,8 +14,8 @@
   aspect-ratio: 1;
   padding: 2.2%;
   border-radius: 22px;
-  background: linear-gradient(160deg, #ffd978, #e59a1f 50%, #b8690c);
-  box-shadow: 0 10px 0 #7a4200, 0 20px 40px rgba(0,0,0,0.55), inset 0 3px 0 rgba(255,255,255,0.6);
+  background: var(--frame, linear-gradient(160deg, #ffd978, #e59a1f 50%, #b8690c));
+  box-shadow: 0 10px 0 var(--frame-edge, #7a4200), 0 20px 40px rgba(0,0,0,0.55), inset 0 3px 0 rgba(255,255,255,0.6);
 }
 .board-rot { position: relative; width: 100%; height: 100%; border-radius: 12px; overflow: visible; transition: transform 400ms; }
 .board-svg { display: block; width: 100%; height: 100%; border-radius: 12px; box-shadow: inset 0 0 0 2px rgba(0,0,0,0.2); background: #fff; }
@@ -138,3 +138,20 @@
 .quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .quick { padding: 8px; border-radius: 12px; background: #fff; color: var(--ink); font: 800 14px var(--font-display); box-shadow: 0 3px 0 #9e95cf; }
 .menu-list { display: flex; flex-direction: column; gap: 10px; }
+
+/* ---- snakes & ladders ---- */
+.snakes-screen .board-frame { width: min(100%, calc(100dvh - var(--sat) - var(--sab) - 260px)); }
+.sl-token .token-pawn { width: 5.2cqw; height: 6.8cqw; left: -2.6cqw; top: -5.6cqw; }
+.sl-token.waiting { opacity: 0.6; }
+.token.m-slide { transition: left 800ms cubic-bezier(.45,0,.3,1), top 800ms cubic-bezier(.45,0,.3,1); }
+.token.m-slide .token-pawn { animation: sl-wobble 800ms ease-in-out; }
+@keyframes sl-wobble { 25% { transform: rotate(-18deg) scale(1.15); } 75% { transform: rotate(18deg) scale(1.15); } }
+.sl-players { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.sl-player { position: relative; display: flex; align-items: center; gap: 6px; padding: 4px 8px 4px 4px; border-radius: 14px; background: rgba(8,4,40,0.55); border: 2px solid rgba(255,255,255,0.12); transition: transform 200ms; }
+.sl-player .avatar { border-radius: 50%; border: 3px solid var(--pc); background: #fff; }
+.sl-player.active { border-color: var(--pc); background: linear-gradient(135deg, var(--pc), var(--pcd)); transform: scale(1.03); box-shadow: 0 0 14px var(--pc); }
+.sl-pname { flex: 1; min-width: 0; font: 800 14px/1.1 var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sl-psq { font: 800 16px var(--font-display); background: rgba(0,0,0,0.3); border-radius: 8px; padding: 0 7px; }
+.sl-player .cpu-badge { left: 22px; bottom: -2px; }
+.sl-dice-row { display: flex; justify-content: center; }
+.sl-dice-row .dice { width: 64px; height: 64px; border-radius: 20px; }

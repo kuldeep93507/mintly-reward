@@ -1,7 +1,7 @@
 // Small inline icon set (stroke icons + a few filled game icons).
 type Name =
   | 'back' | 'gear' | 'coin' | 'gift' | 'trophy' | 'book' | 'globe' | 'users' | 'cpu' | 'phone' | 'share' | 'menu'
-  | 'smile' | 'close' | 'sound' | 'mute' | 'exit' | 'lock' | 'check' | 'wifi' | 'wifiOff' | 'edit' | 'plus' | 'key' | 'star' | 'crown' | 'heart' | 'backspace';
+  | 'smile' | 'close' | 'sound' | 'mute' | 'exit' | 'lock' | 'check' | 'wifi' | 'wifiOff' | 'edit' | 'plus' | 'key' | 'star' | 'crown' | 'heart' | 'backspace' | 'brush';
 
 export function Icon({ name, size = 24, className = '' }: { name: Name; size?: number; className?: string }) {
   const p = { width: size, height: size, viewBox: '0 0 24 24', className: 'icon ' + className, fill: 'none', stroke: 'currentColor', strokeWidth: 2.4, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true };
@@ -37,6 +37,7 @@ export function Icon({ name, size = 24, className = '' }: { name: Name; size?: n
     case 'edit': return <svg {...p}><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4" /></svg>;
     case 'plus': return <svg {...p}><path d="M12 5v14M5 12h14" /></svg>;
     case 'key': return <svg {...p}><circle cx="8" cy="15" r="4" /><path d="M11 12l8-8M16 7l2.5 2.5M14 9l2 2" /></svg>;
+    case 'brush': return <svg {...p}><path d="M14.5 4.5l5 5-8 8-5-5zM6.5 12.5c-2 0-3.5 1.5-3.5 3.5 0 2-1 3-1 3s4 1 6-1c1.2-1.2 1.2-2.8.5-4" /></svg>;
     case 'backspace': return <svg {...p}><path d="M8 5h12v14H8l-5-7z" /><path d="M12 9.5l5 5M17 9.5l-5 5" /></svg>;
     case 'star': return <svg width={size} height={size} viewBox="0 0 24 24" className={'icon ' + className} aria-hidden><path d="M12 2.5l2.9 6 6.6.8-4.9 4.5 1.3 6.5L12 17l-5.9 3.3 1.3-6.5L2.5 9.3l6.6-.8z" fill="currentColor" /></svg>;
     case 'heart': return <svg width={size} height={size} viewBox="0 0 24 24" className={'icon ' + className} aria-hidden><path d="M12 21s-8-5.2-8-11a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 5.8-8 11-8 11z" fill="currentColor" /></svg>;

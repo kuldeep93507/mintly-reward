@@ -132,6 +132,10 @@ export class Rooms {
     this.hub.cfg.log('room closed', r.code, reason);
   }
 
+  list(): RoomInfo[] {
+    return [...this.rooms.values()].map((r) => this.info(r));
+  }
+
   close(): void {
     for (const r of this.rooms.values()) for (const t of r.away.values()) clearTimeout(t);
   }

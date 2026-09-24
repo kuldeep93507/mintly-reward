@@ -10,6 +10,7 @@ import { Icon } from '../ui/Icon';
 import { HowToContent } from '../screens/HowTo';
 import { wait } from '../config';
 import { Board } from './Board';
+import { BOARD_LOOKS } from './theme';
 import { TokensLayer } from './TokensLayer';
 import { PlayerPanel } from './PlayerPanel';
 import { useGameDisplay } from './useGameDisplay';
@@ -35,6 +36,7 @@ export function GameScreen({ controller: ctrl, again }: { controller: GameContro
   const [connected, setConnected] = useState(true);
   const acted = useRef(-1); // seq at which we already sent an action (avoid double taps)
 
+  const look = BOARD_LOOKS[app.theme.board];
   const cur = shown.players[shown.turn];
   const curSeat = snap.seats.find((s) => s.color === cur.color);
   const myTurn = !busy && shown.phase !== 'over' && !!curSeat?.controllable && !autoplay() && acted.current !== shown.seq;
@@ -155,7 +157,7 @@ export function GameScreen({ controller: ctrl, again }: { controller: GameContro
       <div className="game-mid">
       <div className="panels-row">{panel(0)}{panel(1)}</div>
       <div className="board-area">
-        <div className="board-frame">
+        <div className="board-frame" style={{ ['--frame' as string]: look.frame, ['--frame-edge' as string]: look.frameEdge }}>
           <div className="board-rot" style={{ transform: `rotate(${rotation}deg)` }}>
             <Board />
             <TokensLayer state={shown} overrides={overrides} movable={movable} onMove={doMove} rotation={rotation} sparkle={sparkle} />

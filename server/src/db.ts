@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { type Profile, type LeaderboardEntry, levelForXp } from '@ludo/engine';
 import type { Config } from './config.js';
 
@@ -18,6 +18,16 @@ export interface UserRow {
   last_daily_at: number | null;
   last_free_at: number | null;
   created_at: number;
+  player_id: string;
+  banned: number;
+}
+
+const PID_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+function makePlayerId(): string {
+  let s = '';
+  for (let i = 0; i < 6; i++) s += PID_CHARS[randomInt(PID_CHARS.length)];
+  return s;
 }
 
 export class InsufficientCoins extends Error {
@@ -61,7 +71,33 @@ export class Db {
         created_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS coin_tx_user ON coin_tx (user_id, created_at);
+      CREATE TABLE IF NOT EXISTS recent_players (
+        user_id TEXT NOT NULL,
+        other_id TEXT NOT NULL,
+        played_at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, other_id)
+      );
+      CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS recent_players_user ON recent_players (user_id, played_at DESC);
     `);
+    this.migrate();
+  }
+
+  /** Adds columns introduced after the first release and backfills them. */
+  private migrate(): void {
+    const cols = new Set((this.sql.prepare('PRAGMA table_info(users)').all() as { name: string }[]).map((c) => c.name));
+    if (!cols.has('player_id')) this.sql.exec('ALTER TABLE users ADD COLUMN player_id TEXT');
+    if (!cols.has('banned')) this.sql.exec('ALTER TABLE users ADD COLUMN banned INTEGER NOT NULL DEFAULT 0');
+    const missing = this.sql.prepare('SELECT id FROM users WHERE player_id IS NULL').all() as { id: string }[];
+    for (const { id } of missing) this.sql.prepare('UPDATE users SET player_id = ? WHERE id = ?').run(this.freePlayerId(), id);
+    this.sql.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_player_id ON users (player_id)');
+  }
+
+  private freePlayerId(): string {
+    for (;;) {
+      const pid = makePlayerId();
+      if (!this.sql.prepare('SELECT 1 FROM users WHERE player_id = ?').get(pid)) return pid;
+    }
   }
 
   close(): void {
@@ -92,8 +128,8 @@ export class Db {
     const id = randomUUID();
     const now = Date.now();
     this.tx(() => {
-      this.sql.prepare('INSERT INTO users (id, device_id, name, avatar, coins, created_at) VALUES (?, ?, ?, ?, 0, ?)')
-        .run(id, deviceId, name, avatar, now);
+      this.sql.prepare('INSERT INTO users (id, device_id, name, avatar, coins, created_at, player_id) VALUES (?, ?, ?, ?, 0, ?, ?)')
+        .run(id, deviceId, name, avatar, now, this.freePlayerId());
       this.addCoinsRaw(id, this.cfg.startingCoins, 'signup', null);
     });
     return this.getUser(id)!;
@@ -161,9 +197,52 @@ export class Db {
     });
   }
 
+  getByPlayerId(playerId: string): UserRow | undefined {
+    return this.sql.prepare('SELECT * FROM users WHERE player_id = ?').get(playerId.trim().toUpperCase()) as UserRow | undefined;
+  }
+
+  setBanned(userId: string, banned: boolean): void {
+    this.sql.prepare('UPDATE users SET banned = ? WHERE id = ?').run(banned ? 1 : 0, userId);
+  }
+
+  /** Owner user search by name, Player ID or id (most recent first). */
+  searchUsers(query: string, limit = 30): UserRow[] {
+    const q = query.trim();
+    if (!q) return this.sql.prepare('SELECT * FROM users ORDER BY created_at DESC LIMIT ?').all(limit) as unknown as UserRow[];
+    const like = `%${q.replace(/[%_\\]/g, (c) => '\\' + c)}%`;
+    return this.sql.prepare("SELECT * FROM users WHERE name LIKE ? ESCAPE '\\' OR player_id = ? OR id = ? ORDER BY created_at DESC LIMIT ?")
+      .all(like, q.toUpperCase(), q, limit) as unknown as UserRow[];
+  }
+
+  getSetting<T>(key: string): T | null {
+    const r = this.sql.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
+    if (!r) return null;
+    try { return JSON.parse(r.value) as T; } catch { return null; }
+  }
+
+  setSetting(key: string, value: unknown): void {
+    this.sql.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value').run(key, JSON.stringify(value));
+  }
+
+  /** Remember that these humans played together (each sees the others as recent players). */
+  recordCoPlayers(userIds: string[]): void {
+    if (userIds.length < 2) return;
+    const now = Date.now();
+    const stmt = this.sql.prepare('INSERT INTO recent_players (user_id, other_id, played_at) VALUES (?, ?, ?) ON CONFLICT (user_id, other_id) DO UPDATE SET played_at = excluded.played_at');
+    this.tx(() => {
+      for (const a of userIds) for (const b of userIds) if (a !== b) stmt.run(a, b, now);
+    });
+  }
+
+  recentPlayers(userId: string, limit = 20): UserRow[] {
+    return this.sql.prepare('SELECT u.* FROM recent_players r JOIN users u ON u.id = r.other_id WHERE r.user_id = ? ORDER BY r.played_at DESC LIMIT ?')
+      .all(userId, limit) as unknown as UserRow[];
+  }
+
   /** Permanently removes the user and their coin history. */
   deleteUser(userId: string): void {
     this.tx(() => {
+      this.sql.prepare('DELETE FROM recent_players WHERE user_id = ? OR other_id = ?').run(userId, userId);
       this.sql.prepare('DELETE FROM coin_tx WHERE user_id = ?').run(userId);
       this.sql.prepare('DELETE FROM users WHERE id = ?').run(userId);
     });
@@ -185,7 +264,7 @@ export class Db {
     const cooldown = cfg.freeCoinsCooldownMinutes * 60_000;
     const nextFreeCoinsAt = u.last_free_at !== null && now - u.last_free_at < cooldown ? u.last_free_at + cooldown : null;
     return {
-      id: u.id, name: u.name, avatar: u.avatar, coins: u.coins, wins: u.wins, games: u.games, xp: u.xp,
+      id: u.id, playerId: u.player_id, name: u.name, avatar: u.avatar, coins: u.coins, wins: u.wins, games: u.games, xp: u.xp,
       level: levelForXp(u.xp), dailyStreak: u.daily_streak, nextDailyAt, nextFreeCoinsAt,
     };
   }

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Server, Socket } from 'socket.io';
 import {
-  type ClientToServer, type Color, type ServerToClient, type SeatInfo,
+  type ClientToServer, type Color, type DiceOverride, type OfflineGameReport, type RecentPlayer, type ServerToClient, type SeatInfo, type GlobalTheme,
   EMOJIS, QUICK_CHAT, RuleError, levelForXp,
 } from '@ludo/engine';
 import type { Config } from './config.js';
@@ -23,6 +23,14 @@ export type Location =
 
 export { UserError };
 
+export interface OfflineEntry {
+  userId: string;
+  report: OfflineGameReport;
+  updatedAt: number;
+  /** Last dice commands the owner sent for this game (for display). */
+  overrides: Partial<Record<Color, DiceOverride>>;
+}
+
 type AnyAck = (res: { ok: boolean; error?: string; [k: string]: unknown }) => void;
 
 export class Hub {
@@ -32,6 +40,9 @@ export class Hub {
   readonly matchmaker: Matchmaker;
   readonly rooms: Rooms;
   private lastReact = new Map<string, number>();
+  private lastInvite = new Map<string, number>();
+  /** Offline games (vs computer / pass & play / snakes) reported by connected apps, keyed "userId|gameId". */
+  readonly offline = new Map<string, OfflineEntry>();
   private cleanupTimers = new Set<NodeJS.Timeout>();
   closed = false;
 
@@ -42,6 +53,7 @@ export class Hub {
       const token = (socket.handshake.auth as Record<string, unknown> | undefined)?.token;
       const id = this.auth.verify(token);
       if (!id || !db.getUser(id)) return next(new Error('unauthorized'));
+      if (db.getUser(id)!.banned) return next(new Error('banned'));
       socket.data.userId = id;
       next();
     });
@@ -131,6 +143,7 @@ export class Hub {
     const seats: SeatInfo[] = colors.map((c) => seatByColor.get(c) ?? { ...makeBot(used), color: c, isBot: true, connected: true });
     const game = new GameSession(this, id, opts.stake, seats);
     this.games.set(id, game);
+    try { this.db.recordCoPlayers(paid); } catch (e) { this.cfg.log('recent players failed', e); }
     for (const u of paid) {
       this.where.set(u, { kind: 'game', game });
       for (const s of this.sockets.get(u) ?? []) s.join(game.room);
@@ -173,6 +186,8 @@ export class Hub {
     if (!set) this.sockets.set(userId, (set = new Set()));
     const wasOnline = set.size > 0;
     set.add(socket);
+
+    socket.emit('theme', this.theme());
 
     const w = this.where.get(userId);
     if (w?.kind === 'game') {
@@ -223,17 +238,80 @@ export class Hub {
       this.emitToRoom(g.room, 'game:react', { gameId: g.id, color: g.seatOf(u)!.color, text });
     });
 
+    this.handle(socket, 'players:recent', (u) => {
+      const players: RecentPlayer[] = this.db.recentPlayers(u).map((r) => ({
+        playerId: r.player_id, name: r.name, avatar: r.avatar, level: levelForXp(r.xp), online: this.isOnline(r.id),
+      }));
+      return { players };
+    });
+    this.handle(socket, 'invite:send', (u, req) => {
+      if (!isObj(req) || typeof req.toPlayerId !== 'string' || typeof req.roomCode !== 'string') throw new UserError('Bad request');
+      const w = this.where.get(u);
+      if (w?.kind !== 'room' || w.code !== req.roomCode) throw new UserError('You are not in that room');
+      const to = this.db.getByPlayerId(req.toPlayerId);
+      if (!to || to.id === u) throw new UserError('Player not found');
+      if (!this.isOnline(to.id)) throw new UserError(`${to.name} is offline`);
+      const now = Date.now();
+      if (now - (this.lastInvite.get(u) ?? 0) < 1000) throw new UserError('Slow down');
+      this.lastInvite.set(u, now);
+      const me = this.db.getUser(u)!;
+      this.emitToUser(to.id, 'invite:received', { fromPlayerId: me.player_id, fromName: me.name, fromAvatar: me.avatar, roomCode: w.code });
+    });
+    this.handle(socket, 'offline:state', (u, req) => { this.offlineReport(u, req); });
+    this.handle(socket, 'offline:end', (u, req) => {
+      if (isObj(req) && typeof req.id === 'string') this.offline.delete(`${u}|${req.id}`);
+    });
+
     socket.on('disconnect', () => {
       const s = this.sockets.get(userId);
       s?.delete(socket);
       if (s && s.size > 0) return;
       this.sockets.delete(userId);
       this.lastReact.delete(userId);
+      this.lastInvite.delete(userId);
+      // Offline games can only be controlled while the phone is connected; it re-reports on reconnect.
+      for (const [k, e] of this.offline) if (e.userId === userId) this.offline.delete(k);
       const loc = this.where.get(userId);
       if (loc?.kind === 'queue') this.matchmaker.leave(userId);
       else if (loc?.kind === 'room') this.rooms.onDisconnect(userId);
       else if (loc?.kind === 'game') loc.game.setConnected(userId, false);
     });
+  }
+
+  /** The owner-chosen theme applied to every player's app. */
+  theme(): GlobalTheme {
+    return this.db.getSetting<GlobalTheme>('theme') ?? { board: null, dice: null, locked: false };
+  }
+
+  private offlineReport(userId: string, req: unknown): void {
+    if (!isObj(req) || typeof req.id !== 'string' || req.id.length > 64) throw new UserError('Bad request');
+    if (req.game !== 'ludo' && req.game !== 'snakes') throw new UserError('Bad request');
+    if (req.mode !== 'bots' && req.mode !== 'pass') throw new UserError('Bad request');
+    if (!Array.isArray(req.seats) || req.seats.length > 4 || !isObj(req.state)) throw new UserError('Bad request');
+    const key = `${userId}|${req.id}`;
+    const prev = this.offline.get(key);
+    if (!prev && [...this.offline.values()].filter((e) => e.userId === userId).length >= 3) {
+      // Keep at most a few per user: drop the oldest.
+      const oldest = [...this.offline.entries()].filter(([, e]) => e.userId === userId).sort((a, b) => a[1].updatedAt - b[1].updatedAt)[0];
+      this.offline.delete(oldest[0]);
+    }
+    const report = req as unknown as OfflineGameReport;
+    const overrides = { ...(prev?.overrides ?? {}) };
+    // A 'once' command is used up by that colour's next roll on the phone.
+    const last = (report.state as { last?: { type?: string; color?: Color } }).last;
+    if (prev && report.state.seq !== prev.report.state.seq && last?.type === 'roll' && last.color && overrides[last.color]?.mode === 'once') delete overrides[last.color];
+    this.offline.set(key, { userId, report, updatedAt: Date.now(), overrides });
+  }
+
+  /** Owner: remove a user from everything and drop their connections (ban). */
+  kick(userId: string): void {
+    const w = this.where.get(userId);
+    if (w?.kind === 'queue') this.matchmaker.leave(userId);
+    else if (w?.kind === 'room') this.rooms.leave(userId);
+    else if (w?.kind === 'game') w.game.leave(userId);
+    this.where.delete(userId);
+    for (const s of [...(this.sockets.get(userId) ?? [])]) s.disconnect(true);
+    this.sockets.delete(userId);
   }
 
   /** Account deletion: forfeit/leave everything, drop sockets, delete all data. */
