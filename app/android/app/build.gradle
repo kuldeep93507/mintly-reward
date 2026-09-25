@@ -8,8 +8,11 @@ if (keystorePropsFile.exists()) {
     keystorePropsFile.withInputStream { keystoreProps.load(it) }
 }
 def signingValue = { String prop, String env -> keystoreProps.getProperty(prop) ?: System.getenv(env) }
-def releaseStoreFile = signingValue('storeFile', 'LUDO_KEYSTORE_FILE')
-def hasReleaseSigning = releaseStoreFile != null && file(releaseStoreFile).exists()
+// storeFile in keystore.properties is relative to android/ (where that file lives); the env var is absolute.
+def releaseStoreFile = keystoreProps.getProperty('storeFile') ? rootProject.file(keystoreProps.getProperty('storeFile')).path : System.getenv('LUDO_KEYSTORE_FILE')
+// Sign only when every value is there; a half-configured keystore would fail the whole build (debug APK too).
+def hasReleaseSigning = releaseStoreFile != null && file(releaseStoreFile).exists() &&
+    ['storePassword', 'keyAlias', 'keyPassword'].every { p -> signingValue(p, [storePassword: 'LUDO_KEYSTORE_PASSWORD', keyAlias: 'LUDO_KEY_ALIAS', keyPassword: 'LUDO_KEY_PASSWORD'][p]) }
 
 // Bump versionCode for every Play Store upload (CI passes -PversionCode=<run number>).
 def appVersionCode = (project.findProperty('versionCode') ?: '1') as Integer

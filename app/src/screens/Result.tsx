@@ -43,38 +43,51 @@ export function ResultScreen({ outcome, again }: { outcome: GameOutcome; again: 
   };
 
   const seat = (c: string) => outcome.seats.find((s) => s.color === c);
-  const podium = outcome.ranking.slice(0, 3);
-  const order = podium.length === 3 ? [podium[1], podium[0], podium[2]] : podium.length === 2 ? [podium[1], podium[0]] : podium;
-  const winnerName = outcome.you === null ? seat(outcome.ranking[0])?.name : null;
+  const winner = outcome.ranking[0];
+  const winnerSeat = seat(winner);
+  const youPlace = outcome.you ? outcome.ranking.indexOf(outcome.you) + 1 : 0;
+  const leftSet = new Set(outcome.left ?? []);
 
   return (
     <div className="screen result">
       {won && <Confetti />}
       <div className={`result-banner ${won ? 'win' : 'lose'}`}>
-        {won ? (winnerName ? `${winnerName} wins!` : 'You Win!') : outcome.you && outcome.ranking.indexOf(outcome.you) >= 0 ? `You came ${ordinal(outcome.ranking.indexOf(outcome.you) + 1)}` : 'Game Over'}
+        {won ? (outcome.you === null ? `${winnerSeat?.name ?? 'Winner'} wins!` : 'You Win!') : youPlace > 0 ? `You came ${ordinal(youPlace)}` : 'Game Over'}
       </div>
-      <div className="podium">
-        {order.map((c) => {
-          const place = outcome.ranking.indexOf(c) + 1;
+
+      {winnerSeat && (
+        <div className="winner-card" style={{ ['--wc' as string]: PALETTE[winner].main }}>
+          <span className="winner-crown"><Icon name="crown" size={40} /></span>
+          <div className="winner-av"><Avatar id={winnerSeat.avatar} size={84} /></div>
+          <div className="winner-label">WINNER</div>
+          <div className="winner-name">{winnerSeat.isYou ? 'You' : winnerSeat.name}</div>
+        </div>
+      )}
+
+      <div className="standings" data-testid="standings">
+        <div className="standings-title">Final standings</div>
+        {outcome.ranking.map((c, i) => {
+          const place = i + 1;
           const s = seat(c);
+          const pay = outcome.payouts?.[c];
           return (
-            <div key={c} className={`pod pod-${place}`}>
-              {place === 1 && <span className="pod-crown"><Icon name="crown" size={34} /></span>}
-              <div className="pod-av" style={{ borderColor: PALETTE[c].main }}><Avatar id={s?.avatar ?? 0} size={place === 1 ? 76 : 60} /></div>
-              <div className="pod-name">{s?.isYou ? 'You' : s?.name}</div>
-              {outcome.payouts?.[c] ? <div className="pod-coins"><Icon name="coin" size={16} />+{outcome.payouts[c]!.toLocaleString()}</div> : null}
-              <div className="pod-block" style={{ background: `linear-gradient(${PALETTE[c].light}, ${PALETTE[c].dark})` }}>{place}</div>
+            <div key={c} className={`stand-row p${Math.min(place, 4)} ${s?.isYou ? 'you' : ''}`} style={{ animationDelay: `${150 + i * 120}ms` }}>
+              <div className={`stand-place p${Math.min(place, 4)}`}>
+                {place === 1 && <Icon name="crown" size={14} />}
+                {ordinal(place)}
+              </div>
+              <div className="stand-av" style={{ borderColor: PALETTE[c].main }}><Avatar id={s?.avatar ?? 0} size={40} /></div>
+              <div className="stand-name">
+                <span>{s?.isYou ? 'You' : s?.name}</span>
+                <small>{leftSet.has(c) ? 'Left the game' : s?.isBot ? 'Computer' : place === 1 ? 'Winner' : `Finished ${ordinal(place)}`}</small>
+              </div>
+              <span className="stand-color" style={{ background: PALETTE[c].main }} />
+              {pay ? <div className="stand-pay"><Icon name="coin" size={18} />+{pay.toLocaleString()}</div> : null}
             </div>
           );
         })}
       </div>
-      {outcome.ranking.length > 3 && (
-        <div className="rest-ranks">
-          {outcome.ranking.slice(3).map((c, i) => (
-            <div key={c} className="rest-row"><b>{i + 4}</b><Avatar id={seat(c)?.avatar ?? 0} size={32} />{seat(c)?.isYou ? 'You' : seat(c)?.name}</div>
-          ))}
-        </div>
-      )}
+
       {outcome.online && outcome.you && (
         <div className="result-coins">
           {outcome.payouts?.[outcome.you] ? <>You won <Icon name="coin" size={24} /> <b>{outcome.payouts[outcome.you]!.toLocaleString()}</b></>

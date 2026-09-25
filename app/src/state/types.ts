@@ -6,7 +6,11 @@ export interface Settings {
   sound: boolean;
   vibration: boolean;
   autoMove: boolean;
+  /** Remind the player to take a break after an hour of play. */
+  breakReminder?: boolean;
   serverUrl: string;
+  /** True only when the player typed a server address; otherwise every build uses its own default. */
+  serverUrlCustom?: boolean;
 }
 
 export interface LocalIdentity {

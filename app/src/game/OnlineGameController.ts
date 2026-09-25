@@ -47,9 +47,11 @@ export class OnlineGameController implements GameController {
       if (r.gameId !== this.gameId || this.finished) return;
       this.finished = true;
       this.onProfile(r.profile);
-      this.over.emit({ ranking: r.ranking, payouts: r.payouts, seats: this.seats(), you: this.you, online: true, stake: this.stake });
+      const left = this.snap.state.players.filter((p) => p.out).map((p) => p.color);
+      this.over.emit({ ranking: r.ranking, payouts: r.payouts, seats: this.seats(), you: this.you, online: true, stake: this.stake, left });
     };
-    const onNotice = (n: { message: string }) => this.notices.emit(n.message);
+    // A notice may mean we were removed from the game: fetch the latest state too.
+    const onNotice = (n: { message: string }) => { this.notices.emit(n.message); if (!this.finished) this.sync(); };
     // Re-sync after a dropped connection comes back.
     const onConnect = () => this.sync();
     socket.on('game:state', onState);

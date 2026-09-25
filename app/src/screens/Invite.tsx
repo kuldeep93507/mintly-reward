@@ -70,7 +70,12 @@ export function InvitePopup() {
     const r = await emitAck<{ ok: true; room: RoomInfo } | { ok: false; error: string }>((cb) => s.emit('room:join', { code: inv.roomCode }, cb));
     setBusy(false);
     app.setInvite(null);
-    if (r.ok) { app.setPendingOnline({ kind: 'room' }); app.go({ id: 'lobby', room: r.room }); } else app.toast(r.error);
+    if (r.ok) {
+      app.setPendingOnline({ kind: 'room' });
+      // Leave whatever was open (a local game can't be resumed once its screen closes).
+      app.home();
+      app.go({ id: 'lobby', room: r.room });
+    } else app.toast(r.error);
   };
   return (
     <Modal title="Game Invite" onClose={() => app.setInvite(null)} className="invite-pop">

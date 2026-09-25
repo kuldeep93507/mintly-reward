@@ -30,6 +30,8 @@ export interface GameOutcome {
   you: Color | null;
   online: boolean;
   stake: number;
+  /** Players who quit or were removed (they forfeit any prize). */
+  left?: Color[];
 }
 
 /**

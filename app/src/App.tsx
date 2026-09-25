@@ -16,6 +16,7 @@ import { LeaderboardScreen } from './screens/Leaderboard';
 import { SettingsScreen } from './screens/Settings';
 import { HowToScreen } from './screens/HowTo';
 import { DailyModal } from './screens/Daily';
+import { AgeGate } from './screens/AgeGate';
 import { GameScreen } from './game/GameScreen';
 import { Logo } from './screens/Home';
 
@@ -51,6 +52,7 @@ function Shell() {
   // Android back button: screen override first, then pop, then ask to exit on Home.
   useEffect(() => onBackButton(() => {
     const a = ref.current;
+    if (!a.ageOk) return;
     if (a.dailyOpen) { a.setDailyOpen(false); return; }
     if (a.invite) { a.setInvite(null); return; }
     const o = getBackOverride();
@@ -68,7 +70,8 @@ function Shell() {
   return (
     <>
       <div className="screen-wrap" key={key}><Screens /></div>
-      {app.dailyOpen && <DailyModal />}
+      {!app.ageOk && <AgeGate onOk={app.confirmAge} />}
+      {app.ageOk && app.dailyOpen && <DailyModal />}
       {app.invite && <InvitePopup />}
       <div className="toasts">{app.toasts.map((t) => <div key={t.id} className="toast">{t.text}</div>)}</div>
       {askExit && <Confirm title="Exit Ludo Mintly?" text="See you soon!" yes="Exit" onYes={exitApp} onNo={() => setAskExit(false)} />}

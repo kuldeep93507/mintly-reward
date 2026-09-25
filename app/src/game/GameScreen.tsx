@@ -49,11 +49,13 @@ export function GameScreen({ controller: ctrl, again }: { controller: GameContro
   const cornerOf = (c: Color) => ((ALL_COLORS.indexOf(c) + rotation / 90) % 4) as 0 | 1 | 2 | 3;
 
   const doRoll = useCallback(() => {
+    if (acted.current === shown.seq) return; // double tap
     acted.current = shown.seq;
     startRoll(cur.color);
     ctrl.roll();
   }, [ctrl, cur.color, shown.seq, startRoll]);
   const doMove = useCallback((t: number) => {
+    if (acted.current === shown.seq) return; // double tap: one move per state
     acted.current = shown.seq;
     play('click');
     ctrl.move(t);
@@ -89,12 +91,13 @@ export function GameScreen({ controller: ctrl, again }: { controller: GameContro
   }), [ctrl]);
 
   // Show the result once every animation has played.
+  const { replace } = app;
   useEffect(() => {
     if (!outcome || busy) return;
     let alive = true;
-    void wait(1100).then(() => { if (alive) app.replace({ id: 'result', outcome, again }); });
+    void wait(1100).then(() => { if (alive) replace({ id: 'result', outcome, again }); });
     return () => { alive = false; };
-  }, [outcome, busy, again, app]);
+  }, [outcome, busy, again, replace]);
 
   // Online: resync on resume, track connection.
   useEffect(() => {
@@ -106,7 +109,8 @@ export function GameScreen({ controller: ctrl, again }: { controller: GameContro
     s?.on('connect', on);
     s?.on('disconnect', offc);
     return () => { off(); s?.off('connect', on); s?.off('disconnect', offc); };
-  }, [ctrl, app]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctrl]);
 
   useEffect(() => {
     setBackOverride(() => setConfirmExit(true));

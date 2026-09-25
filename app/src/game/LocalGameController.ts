@@ -62,6 +62,20 @@ export class LocalGameController implements GameController {
   onOver(l: (o: GameOutcome) => void) { return this.over.on(l); }
 
   private set(next: GameState) {
+    // Vs Computer: once every human has finished, rank the remaining computer players by
+    // progress and end now instead of making the player watch the bots play it out.
+    if (this.mode === 'bots' && next.phase !== 'over' && !autoplay()
+      && !next.players.some((p) => !p.out && p.rank === null && !this.bots.has(p.color))) {
+      const progress = (p: GameState['players'][number]) => p.tokens.reduce((a, t) => a + t + 1, 0);
+      const rest = next.players.filter((p) => !p.out && p.rank === null).sort((a, b) => progress(b) - progress(a));
+      const ranking = [...next.ranking, ...rest.map((p) => p.color)];
+      next = {
+        ...next,
+        phase: 'over',
+        ranking,
+        players: next.players.map((p) => ({ ...p, rank: ranking.indexOf(p.color) + 1 || p.rank })),
+      };
+    }
     this.state = next;
     this.report();
     this.updates.emit(this.snapshot());

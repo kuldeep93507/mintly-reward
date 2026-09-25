@@ -36,6 +36,9 @@ export function closeSocket() {
 
 /** emit with ack + timeout, resolving to the ack payload or an error result. */
 export function emitAck<T>(fn: (cb: (res: T) => void) => void, timeoutMs = 8000): Promise<T | { ok: false; error: string }> {
+  // socket.io buffers emits while disconnected and sends them after reconnecting, long after the
+  // screen gave up waiting (e.g. a queue join that later charges an entry fee). Refuse instead.
+  if (!socket?.connected) return Promise.resolve({ ok: false, error: 'Not connected to the game server' });
   return new Promise((resolve) => {
     let done = false;
     const t = setTimeout(() => { if (!done) { done = true; resolve({ ok: false, error: 'Server did not respond' }); } }, timeoutMs);

@@ -26,11 +26,12 @@ function schedule(id: string) {
   if (!timer) timer = setTimeout(flush, 300);
 }
 
+const resend = () => { for (const id of reports.keys()) schedule(id); };
+
 /** Called when the app's socket changes (login, server switch, reconnect). */
 export function setOfflineSocket(s: GameSocket | null) {
   socket = s;
   if (!s) return;
-  const resend = () => { for (const id of reports.keys()) schedule(id); };
   s.off('connect', resend);
   s.on('connect', resend);
   resend();

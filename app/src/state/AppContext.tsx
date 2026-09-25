@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { GameInfo, GlobalTheme, Invite, Profile, ServerConfig } from '@ludo/engine';
+import type { GameInfo, GlobalTheme, Invite, Profile, RoomInfo, ServerConfig } from '@ludo/engine';
 import { DEFAULT_SERVER_URL } from '../config';
 import { api, setServer, setToken } from '../net/api';
 import { closeSocket, getSocket, type GameSocket } from '../net/socket';
@@ -11,14 +11,18 @@ import { OnlineGameController } from '../game/OnlineGameController';
 import type { LocalIdentity, LocalTheme, PlayAgain, Screen, ServerStatus, Settings } from './types';
 import { applyOfflineDice, setOfflineSocket } from '../net/offlineLink';
 import { DEFAULT_THEME, ThemeContext, type ThemeChoice } from '../game/theme';
-import { notifyInvite } from '../native/notify';
+import { askNotifyPermission, notifyInvite } from '../native/notify';
 
-const DEFAULT_SETTINGS: Settings = { sound: true, vibration: true, autoMove: true, serverUrl: DEFAULT_SERVER_URL };
+const DEFAULT_SETTINGS: Settings = { sound: true, vibration: true, autoMove: true, breakReminder: true, serverUrl: DEFAULT_SERVER_URL };
+const BREAK_AFTER_MS = 60 * 60_000;
 
 interface Toast { id: number; text: string }
 
 interface AppCtx {
   ready: boolean;
+  /** The player confirmed they are 13 or older (asked once). */
+  ageOk: boolean;
+  confirmAge: () => void;
   settings: Settings;
   updateSettings: (p: Partial<Settings>) => void;
   identity: LocalIdentity;
@@ -63,6 +67,7 @@ function randomId() {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
+  const [ageOk, setAgeOk] = useState(true);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [identity, setIdentity] = useState<LocalIdentity>({ name: 'Player', avatar: 0 });
   const [profile, setProfileState] = useState<Profile | null>(null);
@@ -75,6 +80,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [globalTheme, setGlobalTheme] = useState<GlobalTheme | null>(null);
   const [invite, setInvite] = useState<Invite | null>(null);
   const socketRef = useRef<GameSocket | null>(null);
+  const roomUpdateRef = useRef<((room: RoomInfo) => void) | null>(null);
   const deviceIdRef = useRef('');
   const stackRef = useRef(stack);
   stackRef.current = stack;
@@ -118,6 +124,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       void notifyInvite(i);
     });
     setOfflineSocket(s);
+    // The server may still hold us in a friends room (e.g. the app was restarted inside the
+    // reconnect grace period). Show that lobby so the player can see it and leave it.
+    if (roomUpdateRef.current) s.off('room:update', roomUpdateRef.current);
+    roomUpdateRef.current = (room) => {
+      const top = stackRef.current[stackRef.current.length - 1];
+      if (top.id === 'lobby' || top.id === 'game') return;
+      setStack((st) => [...st.filter((x) => x.id !== 'game' && x.id !== 'snakes'), { id: 'lobby', room }]);
+    };
+    s.on('room:update', roomUpdateRef.current);
     // A game started (matchmaking, a friends room, or a resend after reconnect).
     s.on('game:start', (info: GameInfo) => {
       const top = stackRef.current[stackRef.current.length - 1];
@@ -135,7 +150,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const ident = identityRef.current;
       const auth = await api.guest(deviceIdRef.current, ident.name, ident.avatar);
       setToken(auth.token);
-      setProfile(auth.profile);
+      let prof = auth.profile;
+      // A name/avatar changed while offline was only saved on the phone: send it now.
+      if (await getString('identityDirty') === '1') {
+        if (ident.name !== prof.name || ident.avatar !== prof.avatar) {
+          try { prof = (await api.updateMe({ name: ident.name, avatar: ident.avatar })).profile; } catch { /* keep the server's */ }
+        }
+        await setString('identityDirty', '');
+      }
+      setProfile(prof);
       const cfg = await api.config();
       setConfig(cfg);
       if (cfg.theme) setGlobalTheme(cfg.theme);
@@ -155,7 +178,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void (async () => {
       setLocalThemeState(await getJSON<LocalTheme>('theme', DEFAULT_THEME));
-      const s = await getJSON('settings', DEFAULT_SETTINGS);
+      setAgeOk((await getString('ageOk')) === '1');
+      const stored = await getJSON<Settings>('settings', DEFAULT_SETTINGS);
+      // Use the server address baked into this build unless the player typed their own.
+      const s: Settings = { ...DEFAULT_SETTINGS, ...stored, serverUrl: stored.serverUrlCustom ? stored.serverUrl : DEFAULT_SERVER_URL };
       setSettings(s);
       setSoundEnabled(s.sound);
       setHapticsEnabled(s.vibration);
@@ -171,13 +197,54 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deviceIdRef.current = dev;
       setReady(true);
       void hideSplash();
+      setTimeout(() => { void askNotifyPermission(); }, 1500);
       await connect(s.serverUrl);
     })();
   }, [connect]);
 
+  const confirmAge = useCallback(() => {
+    setAgeOk(true);
+    void setString('ageOk', '1');
+  }, []);
+
+  // Play-time reminder: after an hour on screen, suggest a short break (then again every hour).
+  useEffect(() => {
+    if (!ready || settings.breakReminder === false) return;
+    let played = 0;
+    let last = Date.now();
+    const t = setInterval(() => {
+      const now = Date.now();
+      if (document.visibilityState === 'visible' && now - last < 60_000) played += now - last;
+      last = now;
+      if (played >= BREAK_AFTER_MS) {
+        played = 0;
+        toast("You've been playing for an hour. Time for a short break!");
+      }
+    }, 15_000);
+    return () => clearInterval(t);
+  }, [ready, settings.breakReminder, toast]);
+
+  // Offline: try again when the app comes back, the network returns, and every 20 s.
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  useEffect(() => {
+    if (!ready || status !== 'offline') return;
+    const retry = () => { void connect(settingsRef.current.serverUrl); };
+    const onVisible = () => { if (document.visibilityState === 'visible') retry(); };
+    window.addEventListener('online', retry);
+    document.addEventListener('visibilitychange', onVisible);
+    const t = setInterval(retry, 20_000);
+    return () => {
+      window.removeEventListener('online', retry);
+      document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(t);
+    };
+  }, [ready, status, connect]);
+
   const updateSettings = useCallback((p: Partial<Settings>) => {
     setSettings((s) => {
       const n = { ...s, ...p };
+      if (p.serverUrl !== undefined) n.serverUrlCustom = p.serverUrl.replace(/\/+$/, '') !== DEFAULT_SERVER_URL.replace(/\/+$/, '');
       void setJSON('settings', n);
       setSoundEnabled(n.sound);
       setHapticsEnabled(n.vibration);
@@ -200,6 +267,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch (e) {
         return (e as Error).message;
       }
+    } else {
+      void setString('identityDirty', '1');
     }
     return null;
   }, [status, setProfile]);
@@ -243,7 +312,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [globalTheme, localTheme]);
 
   const value = useMemo<AppCtx>(() => ({
-    ready, settings, updateSettings, identity, profile, setProfile, updateIdentity, config, status,
+    ready, ageOk, confirmAge, settings, updateSettings, identity, profile, setProfile, updateIdentity, config, status,
     reconnect: () => connect(settings.serverUrl),
     deleteAccount,
     socket: () => socketRef.current,
@@ -251,7 +320,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPendingOnline: (a) => { pendingOnline.current = a; },
     toasts, toast, dailyOpen, setDailyOpen,
     theme, localTheme, setLocalTheme, globalTheme, invite, setInvite,
-  }), [ready, settings, updateSettings, identity, profile, setProfile, updateIdentity, config, status, connect, deleteAccount, screen, go, replace, back, home, toasts, toast, dailyOpen, theme, localTheme, setLocalTheme, globalTheme, invite]);
+  }), [ready, ageOk, confirmAge, settings, updateSettings, identity, profile, setProfile, updateIdentity, config, status, connect, deleteAccount, screen, go, replace, back, home, toasts, toast, dailyOpen, theme, localTheme, setLocalTheme, globalTheme, invite]);
 
   return <Ctx.Provider value={value}><ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider></Ctx.Provider>;
 }

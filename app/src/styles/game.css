@@ -155,3 +155,18 @@
 .sl-player .cpu-badge { left: 22px; bottom: -2px; }
 .sl-dice-row { display: flex; justify-content: center; }
 .sl-dice-row .dice { width: 64px; height: 64px; border-radius: 20px; }
+
+/* Finishing place, shown on the player's panel as soon as they finish. */
+.rank-badge.r1 { background: linear-gradient(#ffe066, #f5b400); }
+.rank-badge.r2 { background: linear-gradient(#f4f6fb, #aab3c5); color: #37404f; }
+.rank-badge.r3 { background: linear-gradient(#f3c49a, #c47a3c); color: #4a2408; }
+.rank-badge.r4 { background: linear-gradient(#9aa0c8, #5d6394); color: #fff; }
+.rank-medal { min-width: 50px; height: 34px; padding: 0 6px; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 2px;
+  font: 800 16px/1 var(--font-display); border: 2px solid #fff; box-shadow: 0 3px 0 rgba(0,0,0,0.3); animation: medal-in 500ms cubic-bezier(.2,1.6,.4,1) both; }
+.rank-medal.r1 { background: linear-gradient(#ffe066, #f5b400); color: #6a3500; }
+.rank-medal.r1 .icon { color: #fff4c2; }
+.rank-medal.r2 { background: linear-gradient(#f4f6fb, #aab3c5); color: #37404f; }
+.rank-medal.r3 { background: linear-gradient(#f3c49a, #c47a3c); color: #4a2408; }
+.rank-medal.r4 { background: linear-gradient(#9aa0c8, #5d6394); color: #fff; }
+.rank-medal.left { background: #5b5480; color: #ddd8ff; font-size: 13px; }
+@keyframes medal-in { from { transform: scale(0.2); opacity: 0; } }

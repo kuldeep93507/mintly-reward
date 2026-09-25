@@ -65,16 +65,24 @@ export function Matchmaking({ players, stake }: { players: 2 | 4; stake: number 
       if (st.players === players && st.stake === stake) setFound((f) => { if (st.found > f) play('pop'); return st.found; });
     };
     s.on('queue:status', onStatus);
+    let alive = true;
     void emitAck<{ ok: boolean; error?: string }>((cb) => s.emit('queue:join', { players, stake }, cb)).then((r) => {
-      if (!r.ok) { app.toast(r.error ?? 'Could not join the queue'); app.back(); }
+      if (!r.ok && alive) {
+        if (s.connected) s.emit('queue:leave');
+        app.toast(r.error ?? 'Could not join the queue');
+        app.back();
+      }
     });
-    const cancel = () => { s.emit('queue:leave'); app.back(); };
+    // The server drops a disconnected player from the queue: join again after reconnecting.
+    const rejoin = () => { s.emit('queue:join', { players, stake }, () => {}); };
+    s.on('connect', rejoin);
+    const cancel = () => { if (s.connected) s.emit('queue:leave'); app.back(); };
     setBackOverride(cancel);
-    return () => { clearInterval(t); s.off('queue:status', onStatus); setBackOverride(null); };
+    return () => { alive = false; clearInterval(t); s.off('queue:status', onStatus); s.off('connect', rejoin); setBackOverride(null); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const cancel = () => { app.socket()?.emit('queue:leave'); app.back(); };
+  const cancel = () => { const s = app.socket(); if (s?.connected) s.emit('queue:leave'); app.back(); };
   const mm = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')}`;
   return (
     <div className="screen matchmaking">

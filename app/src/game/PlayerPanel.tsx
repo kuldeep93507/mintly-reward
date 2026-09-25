@@ -5,6 +5,7 @@ import type { SeatView } from './controller';
 import { Dice } from './Dice';
 import type { DiceView } from './useGameDisplay';
 import { PALETTE } from './palette';
+import { ordinal } from '../ui/kit';
 
 interface Props {
   seat: SeatView | undefined;
@@ -43,7 +44,7 @@ export function PlayerPanel({ seat, corner, active, rank, out, dice, canRoll, on
           )}
           {seat.isBot && <span className="cpu-badge">CPU</span>}
           {!seat.connected && <span className="conn-off" title="Disconnected"><Icon name="wifiOff" size={12} /></span>}
-          {rank && <span className="rank-badge">{rank}</span>}
+          {rank && <span className={`rank-badge r${Math.min(rank, 4)}`}>{rank}</span>}
         </div>
         <div className="panel-info">
           <div className="panel-name">{seat.isYou ? 'You' : seat.name}</div>
@@ -60,6 +61,13 @@ export function PlayerPanel({ seat, corner, active, rank, out, dice, canRoll, on
         </div>
       </div>
       <div className="panel-dice">
+        {rank !== null && !out && (
+          <div className={`rank-medal r${Math.min(rank, 4)}`} title={`Finished ${ordinal(rank)}`}>
+            {rank === 1 && <Icon name="crown" size={16} />}
+            <span>{ordinal(rank)}</span>
+          </div>
+        )}
+        {out && <div className="rank-medal left">Left</div>}
         {active && !out && rank === null && (
           <Dice value={dice.color === seat.color ? dice.value : 6} rolling={dice.rolling && dice.color === seat.color}
             canRoll={canRoll} onRoll={onRoll} color={col.main} />

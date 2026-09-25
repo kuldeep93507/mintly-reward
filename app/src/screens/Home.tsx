@@ -44,6 +44,8 @@ const TILES = [
   { id: 'pass', title: 'Pass & Play', sub: 'One device', cls: 'tile-pass', icon: 'phone' },
 ] as const;
 
+let dailyShownThisSession = false;
+
 export function Home() {
   const app = useApp();
   const { profile, identity, config, status } = app;
@@ -52,11 +54,10 @@ export function Home() {
   const freeEligible = !!profile && !!config && profile.coins < config.freeCoinsBelow &&
     (profile.nextFreeCoinsAt === null || profile.nextFreeCoinsAt <= Date.now());
 
-  // Pop the daily reward once per session when it's claimable.
-  const [shownDaily, setShownDaily] = useState(false);
+  // Pop the daily reward once per session when it's claimable (not on every return to Home).
   useEffect(() => {
-    if (claimable && !shownDaily && config) { setShownDaily(true); app.setDailyOpen(true); }
-  }, [claimable, shownDaily, config, app]);
+    if (claimable && !dailyShownThisSession && config && app.ageOk) { dailyShownThisSession = true; app.setDailyOpen(true); }
+  }, [claimable, config, app]);
 
   return (
     <div className="screen home">
