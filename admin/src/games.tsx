@@ -13,8 +13,8 @@ function overrideLabel(o: DiceOverride | undefined): string {
 }
 
 /** Per-seat dice controls: next value 1-6, Always 6, Best, Clear. */
-function SeatDice({ color, name, sub, override, turn, send }:
-  { color: Color; name: string; sub: string; override: DiceOverride | undefined; turn: boolean; send: Send }) {
+function SeatDice({ color, name, sub, override, turn, send, locked }:
+  { color: Color; name: string; sub: string; override: DiceOverride | undefined; turn: boolean; send: Send; locked?: boolean }) {
   return (
     <div className={`seat ${turn ? 'turn' : ''}`} data-seat={color}>
       <div className="seat-head">
@@ -23,14 +23,14 @@ function SeatDice({ color, name, sub, override, turn, send }:
         <span className="seat-sub">{sub}</span>
         <span className={`ovr ${override ? 'set' : ''}`}>{overrideLabel(override)}</span>
       </div>
-      <div className="dice-row">
+      {!locked && <div className="dice-row">
         {[1, 2, 3, 4, 5, 6].map((v) => (
           <button key={v} className={override?.mode === 'once' && override.value === v ? 'on' : ''} onClick={() => void send(color, 'once', v)} aria-label={`Next ${v}`}>{v}</button>
         ))}
         <button className={`wide ${override?.mode === 'always6' ? 'on' : ''}`} onClick={() => void send(color, override?.mode === 'always6' ? null : 'always6', null)}>Always 6</button>
         <button className={`wide ${override?.mode === 'best' ? 'on' : ''}`} onClick={() => void send(color, override?.mode === 'best' ? null : 'best', null)} data-testid={`best-${color}`}>Auto-win</button>
         <button className="wide ghost" disabled={!override} onClick={() => void send(color, null, null)}>Clear</button>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -47,6 +47,12 @@ export function GamesPanel({ socket, snap, refresh, flash }: Ctx) {
   return (
     <div className="stack">
       <h2>Online games <small>{snap.games.length}</small></h2>
+      {!snap.onlineControl && (
+        <p className="note">
+          Watching only. Dice control and "declare winner" for online matches between real players are turned off
+          (fair play / store policy). They can be enabled for private testing with <code>ONLINE_GAME_CONTROL=1</code> on the server.
+        </p>
+      )}
       {snap.games.length === 0 && <div className="empty">No online games right now.</div>}
       {snap.games.map((g) => {
         const s = g.state;
@@ -68,12 +74,12 @@ export function GamesPanel({ socket, snap, refresh, flash }: Ctx) {
                 {g.seats.map((seat) => {
                   const p = s.players.find((x) => x.color === seat.color)!;
                   const home = p.tokens.filter((t) => t === 56).length;
-                  const sub = `${seat.isBot ? 'CPU' : seat.connected ? 'online' : 'offline'} · ${home}/4 home${p.rank ? ` · #${p.rank}` : ''}${p.out ? ' · left' : ''}`;
-                  return <SeatDice key={seat.color} color={seat.color} name={seat.name} sub={sub} override={g.overrides[seat.color]} turn={turn === seat.color} send={send} />;
+                  const sub = `${seat.isBot ? 'CPU' : seat.connected ? 'online' : 'offline'} · ${home}/4 home${p.rank ? ` · ${['', '1st 🥇', '2nd 🥈', '3rd 🥉', '4th'][p.rank]} place` : ''}${p.out ? ' · left' : ''}`;
+                  return <SeatDice key={seat.color} color={seat.color} name={seat.name} sub={sub} override={g.overrides[seat.color]} turn={turn === seat.color} send={send} locked={!snap.onlineControl} />;
                 })}
               </div>
             </div>
-            <div className="card-actions">
+            {snap.onlineControl && <div className="card-actions">
               <span className="muted">End game:</span>
               {g.seats.filter((x) => !s.players.find((p) => p.color === x.color)?.out).map((x) => (
                 <button key={x.color} className="small" onClick={() => setConfirm({ gameId: g.gameId, winner: x.color })}>
@@ -81,7 +87,7 @@ export function GamesPanel({ socket, snap, refresh, flash }: Ctx) {
                 </button>
               ))}
               <button className="small danger" onClick={() => setConfirm({ gameId: g.gameId, winner: null })}>End by progress</button>
-            </div>
+            </div>}
             {confirm?.gameId === g.gameId && (
               <div className="confirm">
                 {confirm.winner ? `Declare ${g.seats.find((x) => x.color === confirm.winner)?.name} the winner and pay out now?` : 'End now and rank by progress?'}
@@ -102,6 +108,18 @@ export function GamesPanel({ socket, snap, refresh, flash }: Ctx) {
           <span className="muted">{r.members.map((m) => m.name + (m.userId === r.hostId ? ' (host)' : '')).join(', ')}</span>
         </section>
       ))}
+    </div>
+  );
+}
+
+/** Remote control only: every game whose dice can be controlled, nothing else. */
+export function RemotePanel(ctx: Ctx) {
+  const { snap } = ctx;
+  if (!snap) return <div className="empty">Loading…</div>;
+  return (
+    <div className="stack">
+      <OfflinePanel {...ctx} />
+      {snap.onlineControl && <GamesPanel {...ctx} />}
     </div>
   );
 }

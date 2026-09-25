@@ -9,10 +9,16 @@ function UserRow({ u, ctx, onChange }: { u: OwnerUser; ctx: Ctx; onChange: (u: O
   const [amount, setAmount] = useState('500');
   const [name, setName] = useState(u.name);
   const [editing, setEditing] = useState(false);
+  const [confirm, setConfirm] = useState<'take' | 'ban' | null>(null);
+  const [busy, setBusy] = useState(false);
   const coins = async (sign: 1 | -1) => {
+    if (busy) return;
     const n = Math.round(Number(amount));
     if (!Number.isFinite(n) || n <= 0) return ctx.flash('Enter a positive amount', true);
+    setBusy(true);
     const r = await call<{ user: OwnerUser }>(ctx.socket, 'owner:coins', { userId: u.id, amount: sign * n });
+    setBusy(false);
+    setConfirm(null);
     if (r.ok) { onChange(r.user); ctx.flash(`${sign > 0 ? 'Gave' : 'Took'} ${n} coins ${sign > 0 ? 'to' : 'from'} ${u.name}`); } else ctx.flash(r.error, true);
   };
   const rename = async () => {
@@ -20,6 +26,7 @@ function UserRow({ u, ctx, onChange }: { u: OwnerUser; ctx: Ctx; onChange: (u: O
     if (r.ok) { onChange(r.user); setEditing(false); ctx.flash('Renamed'); } else ctx.flash(r.error, true);
   };
   const ban = async () => {
+    setConfirm(null);
     const r = await call<{ user: OwnerUser }>(ctx.socket, 'owner:ban', { userId: u.id, banned: !u.banned });
     if (r.ok) { onChange(r.user); ctx.flash(r.user.banned ? `${u.name} banned` : `${u.name} unbanned`); } else ctx.flash(r.error, true);
   };
@@ -33,20 +40,30 @@ function UserRow({ u, ctx, onChange }: { u: OwnerUser; ctx: Ctx; onChange: (u: O
             <button className="small ghost" onClick={() => { setEditing(false); setName(u.name); }}>Cancel</button>
           </span>
         ) : (
-          <b>{u.name} <button className="link" onClick={() => setEditing(true)}>rename</button></b>
+          <b className="user-title"><span className={`presence ${u.online ? 'on' : ''}`} />{u.name} <button className="link" onClick={() => setEditing(true)}>rename</button></b>
         )}
         <span className="muted">
-          {u.playerId} · Lv {u.level} · {u.wins}/{u.games} wins · <span className={u.online ? 'ok' : ''}>{u.online ? 'online' : 'offline'}</span>
+          <span className="mono">{u.playerId}</span> · Lv {u.level} · {u.wins}/{u.games} wins · <span className={u.online ? 'ok' : ''}>{u.online ? 'online' : 'offline'}</span>
           {u.banned && <span className="bad"> · banned</span>}
         </span>
       </div>
       <div className="user-actions">
         <span className="coins">{u.coins.toLocaleString()} coins</span>
+        {[100, 500, 1000, 5000].map((v) => (
+          <button key={v} className={`chip ${amount === String(v) ? 'on' : ''}`} onClick={() => setAmount(String(v))}>{v.toLocaleString()}</button>
+        ))}
         <input className="amt" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, ''))} inputMode="numeric" aria-label="Amount" />
-        <button className="small" onClick={() => void coins(1)}>Give</button>
-        <button className="small ghost" onClick={() => void coins(-1)}>Take</button>
-        <button className={`small ${u.banned ? '' : 'danger'}`} onClick={() => void ban()}>{u.banned ? 'Unban' : 'Ban'}</button>
+        <button className="small give" disabled={busy} onClick={() => void coins(1)}>+ Give</button>
+        <button className="small ghost" disabled={busy} onClick={() => setConfirm('take')}>− Take</button>
+        <button className={`small ${u.banned ? '' : 'danger'}`} onClick={() => (u.banned ? void ban() : setConfirm('ban'))}>{u.banned ? 'Unban' : 'Ban'}</button>
       </div>
+      {confirm && (
+        <div className="confirm">
+          {confirm === 'take' ? `Take ${Number(amount || 0).toLocaleString()} coins from ${u.name}?` : `Ban ${u.name}? They are logged out and cannot play.`}
+          <button className="danger" onClick={() => void (confirm === 'take' ? coins(-1) : ban())}>Yes</button>
+          <button className="ghost" onClick={() => setConfirm(null)}>No</button>
+        </div>
+      )}
     </section>
   );
 }

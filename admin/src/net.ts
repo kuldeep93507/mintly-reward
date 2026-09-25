@@ -19,6 +19,9 @@ type Res<T> = ({ ok: true } & T) | { ok: false; error: string };
 
 /** Emit with an ack; resolves to the ack or a timeout error. */
 export function call<T = object>(s: AdminSocket, ev: keyof OwnerClientToServer, ...args: unknown[]): Promise<Res<T>> {
+  // socket.io queues emits while disconnected and sends them all on reconnect, long after we
+  // reported a timeout (a "Give coins" clicked twice would then run twice). Refuse instead.
+  if (!s.connected) return Promise.resolve({ ok: false, error: 'Not connected to the server' });
   return new Promise((resolve) => {
     let done = false;
     const t = setTimeout(() => { if (!done) { done = true; resolve({ ok: false, error: 'Server did not respond' }); } }, 8000);
