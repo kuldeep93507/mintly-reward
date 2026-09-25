@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { GameInfo, GlobalTheme, Invite, Profile, RoomInfo, ServerConfig } from '@ludo/engine';
-import { DEFAULT_SERVER_URL } from '../config';
+import { DEFAULT_SERVER_URL, SHOW_SERVER_SETTING } from '../config';
 import { api, setServer, setToken } from '../net/api';
 import { closeSocket, getSocket, type GameSocket } from '../net/socket';
 import { getJSON, getString, setJSON, setString } from '../native/prefs';
@@ -182,7 +182,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAgeOk((await getString('ageOk')) === '1');
       const stored = await getJSON<Settings>('settings', DEFAULT_SETTINGS);
       // Use the server address baked into this build unless the player typed their own.
-      const s: Settings = { ...DEFAULT_SETTINGS, ...stored, serverUrl: stored.serverUrlCustom ? stored.serverUrl : DEFAULT_SERVER_URL };
+      const s: Settings = { ...DEFAULT_SETTINGS, ...stored, serverUrl: SHOW_SERVER_SETTING && stored.serverUrlCustom ? stored.serverUrl : DEFAULT_SERVER_URL };
       setSettings(s);
       setSoundEnabled(s.sound);
       setHapticsEnabled(s.vibration);

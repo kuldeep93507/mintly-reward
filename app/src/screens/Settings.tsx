@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../state/AppContext';
 import { api } from '../net/api';
-import { APP_VERSION, PRIVACY_POLICY_URL, SUPPORT_EMAIL } from '../config';
+import { APP_VERSION, PRIVACY_POLICY_URL, SHOW_SERVER_SETTING, SUPPORT_EMAIL } from '../config';
 import { Btn, Confirm, Header, Toggle } from '../ui/kit';
 import { Icon } from '../ui/Icon';
 
@@ -53,7 +53,7 @@ export function SettingsScreen() {
           <Toggle label="Break reminder (every hour)" on={settings.breakReminder !== false} onChange={(v) => app.updateSettings({ breakReminder: v })} />
         </div>
 
-        <div className="card">
+        {SHOW_SERVER_SETTING && <div className="card">
           <div className="card-title">Game server <span className={`status-dot ${app.status}`} /> <small>{app.status}</small></div>
           <p className="fine">Advanced: point a test phone at your PC, e.g. http://192.168.1.5:3000</p>
           <input className="text-input" value={url} onChange={(e) => { setUrl(e.target.value); setTest('idle'); }} inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
@@ -63,7 +63,7 @@ export function SettingsScreen() {
           </div>
           {test === 'ok' && <div className="test-ok"><Icon name="check" size={16} /> Server reachable</div>}
           {test === 'fail' && <div className="test-fail"><Icon name="wifiOff" size={16} /> Can't reach that server</div>}
-        </div>
+        </div>}
 
         <div className="card">
           <button className="link-row" onClick={() => app.go({ id: 'themes' })}>Themes <Icon name="back" size={16} className="flip" /></button>
