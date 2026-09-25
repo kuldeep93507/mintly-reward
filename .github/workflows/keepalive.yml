@@ -1,0 +1,26 @@
+name: Keep game server awake
+
+# Render's free plan puts the server to sleep after 15 minutes without traffic.
+# This pings it every 10 minutes so players don't wait for it to wake up.
+# Set the repository variable SERVER_URL to change the server; remove this file
+# (or disable the workflow in the Actions tab) once you move to a paid plan.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping /health
+        env:
+          URL: ${{ vars.SERVER_URL || 'https://ludo-mintly-server.onrender.com' }}
+        run: |
+          for i in 1 2 3; do
+            if curl -fsS -m 60 "$URL/health"; then echo; echo "Server is awake"; exit 0; fi
+            sleep 20
+          done
+          echo "::warning::Server did not answer at $URL"
