@@ -49,6 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VITE_SERVER_URL: ${{ inputs.server_url || vars.SERVER_URL || 'http://10.0.2.2:3000' }}
+      VITE_SUPPORT_EMAIL: ${{ vars.SUPPORT_EMAIL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -68,6 +69,10 @@ jobs:
         working-directory: app
         run: |
           echo "Server URL: $VITE_SERVER_URL"
+          case "$VITE_SERVER_URL" in
+            https://*) ;;
+            *) echo "::warning::SERVER_URL is not https ($VITE_SERVER_URL). The release APK/AAB cannot reach it; set the SERVER_URL repository variable before uploading to Play." ;;
+          esac
           npm run build
           npx cap sync android
 

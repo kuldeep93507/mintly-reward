@@ -36,14 +36,27 @@ Local build: `npm run build -w admin && cd admin && npx cap sync android && cd a
 
 | Tab | Kya kar sakte ho |
 |---|---|
-| **Live** | Saare online games (quick match + private room) live board ke saath, har seat (bots bhi) ke liye dice control, *End game* / *X wins* (declare winner). Waiting private rooms bhi dikhte hain. |
+| **Overview** | Online players, live games, rooms, total/aaj ke users, aaj ke matches, players ke coins, top 5 aur naye 5 players. |
+| **Remote** | Sirf dice remote control: saare offline games (aur online games agar `ONLINE_GAME_CONTROL=1` ho). Upar **Remote only** button dabao to baaki tabs chhup jaate hain (is device par yaad rehta hai). |
+| **Live** | Saare online games (quick match + private room) live board ke saath, aur waiting private rooms. Dice control / *X wins* sirf tab jab server par `ONLINE_GAME_CONTROL=1` ho (default **band** — neeche dekho). |
 | **Offline** | Phones par chal rahe offline games (vs Computer, Pass & Play, Snakes & Ladders) — sirf jab wo phone server se connected ho. Yahan se bhi dice control. |
 | **Users** | Naam / Player ID se search, coins **Give/Take**, **rename**, **Ban/Unban** (ban = turant disconnect, game forfeit, dobara login nahi). |
 | **Theme** | Sab players ke liye board theme (Classic/Night/Wood/Candy) aur dice skin (White/Gold/Red/Neon). "Player's choice" = player khud chune. **Lock** = player apna theme change nahi kar sakta. Turant sab connected apps par apply. |
 | **Config** | Daily rewards, online stakes (entry fees), turn seconds (5-120). Database me save hota hai (restart ke baad bhi). Naye games / app launch par lagta hai. |
 | **Notice** | Sab online players ko ek message (toast) bhejo. |
 
-## 4. Dice control (har seat ke liye)
+## 4. Online matches: control default band (zaroori)
+
+Online match me asli players ke coins lage hote hain aur wo maante hain ki dice random hai. Unke match ka dice ya
+winner chupke se badalna unhe dhokha dena hai, aur Google Play policy ke hisaab se app/account ban ho sakta hai.
+Isliye server par `ONLINE_GAME_CONTROL` **default band** hai: Live tab me online games sirf dekh sakte ho. Privacy
+policy bhi players ko yahi batati hai ("online matches ka dice koi nahi badalta").
+
+- **Production (Play Store wala server): hamesha `ONLINE_GAME_CONTROL=0` rakho.**
+- Sirf apne private testing server par `ONLINE_GAME_CONTROL=1` karke online dice control test kar sakte ho.
+- Offline games (phone par, koi coins nahi) ka dice control hamesha chalta hai, aur privacy policy me bataya gaya hai.
+
+## 5. Dice control (har seat ke liye)
 
 - **1 … 6** — us colour ka *agla* roll yahi aayega (sirf ek baar, phir normal dice).
 - **Always 6** — har roll 6 (jab tak Clear na karo). Teesra 6 lagatar hota to turn chali jaati, isliye us waqt best 1-5 value di jaati hai.
@@ -55,7 +68,7 @@ Online games me server authoritative hai: override server par rehta hai aur us c
 chahe player khud roll kare, timeout par auto-play ho, ya bot ho. **Players ko kuch alag nahi dikhta** — koi event,
 koi field, kuch bhi players ko nahi jaata; unko bas normal dice result dikhta hai.
 
-## 5. Offline games ka control — limitation
+## 6. Offline games ka control — limitation
 
 Offline game phone par hi chalta hai. Game app jab server se connected hota hai to background me chupchaap chhota
 sa summary (`offline:state`) bhejta rehta hai, aur admin ka dice command (`offline:dice`) sirf usi phone ko jaata hai,
@@ -64,7 +77,7 @@ jo agle roll par apply hota hai.
 **Agar phone internet/server se connected nahi hai to offline control kaam nahi karega** — game normal dice se
 chalega aur Admin ke Offline tab me wo game nahi dikhega (disconnect hote hi list se hat jaata hai, reconnect par wapas aata hai).
 
-## 6. Security notes
+## 7. Security notes
 
 - `/admin` namespace alag hai; normal player tokens se usme connect nahi ho sakta.
 - Admin ke saare actions server log me aate hain (`owner coins`, `owner ban`, `game ... ended by owner`, ...).

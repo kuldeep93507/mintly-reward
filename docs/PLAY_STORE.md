@@ -1,102 +1,118 @@
-# Publishing Ludo Mintly on Google Play
+# Ludo Mintly ko Google Play par daalna — step by step
 
-Do these steps in order. Everything marked **[YOU]** needs your own account or
-decision; the rest is already set up in this repo.
+Upar se neeche ek-ek karke karo. **[AAP]** wale kaam aapke account/decision ke hain; baaki repo me pehle se ready hai.
+Store listing ka text `docs/store/listing.md` me hai.
 
-## 1. Put the game server online **[YOU]**
+## 0. Jo already ready hai (check kar liya)
 
-`localhost` only works on your own computer (and phones on the same Wi-Fi via
-your PC's IP). Players from the Play Store need a public **https** server.
+- targetSdk / compileSdk **36** (31 Aug 2026 ke baad har upload ke liye zaroori), minSdk 24.
+- Coins free hain: na khareed sakte, na cash/gift card me badal sakte → India ke Online Gaming Act 2025 me
+  "online social game" (online money game nahi). **Kabhi bhi coin purchase ya cash-out mat jodna.**
+- No ads, no third-party analytics/SDK, no free-text chat (sirf emoji aur fixed phrases).
+- In-app **Delete account** (Settings) + bina app ke email se deletion (privacy policy `#delete-account`).
+- Pehli baar khulne par **age screen** (13+), **break reminder** (1 ghante par), **Contact us / Report a problem**.
+- Online matches me dice server random deta hai; owner ka online control `ONLINE_GAME_CONTROL` se **default band**.
+- Icon 512×512 aur feature graphic 1024×500: `docs/store/`.
 
-Easiest: [Render](https://render.com) → New → Blueprint → pick this GitHub
-repo. `render.yaml` creates the web service with a disk for the database.
-Free instances sleep when idle; use a paid instance ($7/month) for a real
-launch so coins and matches aren't interrupted. Any VPS with Docker works too
-(see `server/README.md`).
+## 1. Support email chuno **[AAP]**
 
-Then in GitHub → repo **Settings → Secrets and variables → Actions → Variables**
-add `SERVER_URL` = your server URL (for example `https://ludo-mintly.onrender.com`).
+Ek email jo aap roz check karte ho (player complaints, deletion requests, Play Console contact).
+- `docs/privacy-policy.html` me 3 jagah `[YOUR SUPPORT EMAIL]` ko us email se badlo.
+- GitHub → repo **Settings → Secrets and variables → Actions → Variables** me `SUPPORT_EMAIL` = wahi email
+  (app ke "Contact us" button me yahi jaata hai).
 
-## 2. Create your upload key **[YOU]** (once; never lose it)
+## 2. Game server online karo **[AAP]**
 
-On any computer with Java:
+Players ke liye public **https** server chahiye. Render → New → Blueprint → ye repo. `render.yaml` sab set karta hai
+(disk, `TRUST_PROXY=1`, **`ONLINE_GAME_CONTROL=0`**). Free plan so jaata hai; launch ke liye paid instance (~$7/mahina).
+- Render dashboard se `OWNER_KEY` copy karke safe rakho (Ludo Admin login).
+- GitHub Variables me `SERVER_URL` = server ka https URL (jaise `https://ludo-mintly.onrender.com`).
+- **Production server par `ONLINE_GAME_CONTROL` kabhi `1` mat karna** (asli players ke match badalna = policy violation;
+  privacy policy bhi players ko ye promise karti hai).
+
+## 3. Upload key banao **[AAP]** (ek baar; kabhi mat khona)
 
 ```bash
 keytool -genkeypair -v -keystore ludo-upload.jks -alias ludo -keyalg RSA -keysize 2048 -validity 10000
-base64 -w0 ludo-upload.jks > ludo-upload.b64    # macOS: base64 -i ludo-upload.jks -o ludo-upload.b64
+base64 -w0 ludo-upload.jks > ludo-upload.b64
 ```
 
-Add these GitHub **Secrets** (same settings page, Secrets tab):
+GitHub **Secrets**: `ANDROID_KEYSTORE_BASE64` (b64 file ka content), `ANDROID_KEYSTORE_PASSWORD`,
+`ANDROID_KEY_ALIAS` = `ludo`, `ANDROID_KEY_PASSWORD`. `.jks` aur passwords ka backup rakho, commit kabhi nahi.
 
-| Secret | Value |
+## 4. Privacy policy live karo **[AAP]**
+
+Kaam `main` branch par merge hone ke baad: GitHub → **Settings → Pages** → Deploy from a branch → `main` → `/docs`.
+URL: `https://kuldeep93507.github.io/mintly-reward/privacy-policy.html` (app ki Settings me yahi link hai).
+Browser me khol ke check karo ki email sahi dikh raha hai.
+
+## 5. Build
+
+GitHub → **Actions → Build Android app → Run workflow**. Artifacts:
+- `ludo-mintly-release-aab` → Play Console me upload
+- `ludo-mintly-debug-apk` → apne phone par test
+- `ludo-admin-debug-apk` → sirf aapke liye (Ludo Admin). **Ise Play Store par kabhi mat daalna.**
+
+Agar log me "SERVER_URL is not https" warning aaye to AAB upload mat karna, pehle step 2 pura karo.
+
+## 6. Play Console **[AAP]**
+
+1. <https://play.google.com/console> par developer account ($25 ek baar, ID verification).
+2. **Create app** → "Ludo Mintly", Game, Free. Declarations: policies accept, US export laws accept.
+3. **Store listing**: text `docs/store/listing.md` se; icon `docs/store/icon-512.png`; feature graphic
+   `docs/store/feature-graphic-1024x500.png`; phone screenshots kam se kam 2 (behtar 4–8) — naye screenshots
+   test phone se lo (home, game board, result screen, online lobby). Admin app ke screenshots **mat** daalna.
+   Category: **Board**. Tags: Board, Ludo, Multiplayer.
+4. **App content** — neeche wale exact jawab.
+5. **Closed testing (zaroori)**: naye personal account par **kam se kam 12 testers, lagatar 14 din** opted-in.
+   Closed testing track banao → AAB upload → testers ke Gmail list → opt-in link share → sab 14 din install rakhein
+   aur thoda khelein. Beech me opt-out kiya to unka count nahi hoga.
+6. 14 din baad **Apply for production** → release banao → roll out. Review me kuch din lag sakte hain.
+
+## 7. App content — exact jawab
+
+**Privacy policy:** step 4 wala URL.
+
+**Ads:** No, my app does not contain ads.
+
+**App access:** All functionality is available without special access (guest account apne aap banta hai).
+
+**Content rating (IARC questionnaire)** — category *Game*:
+- Violence / fear / sexuality / language / drugs: **No** (Ludo aur Snakes & Ladders, cartoon avatars).
+- Real-money gambling: **No**.
+- **Simulated gambling:** app me casino/slot/cards nahi hai; players online match me *free virtual coins* entry
+  ke roop me lagate hain jo khareede ya cash nahi kiye ja sakte. Question ko sach-sach padh ke jawab do; agar
+  "users can bet virtual currency on game outcome" jaisa poochha jaye to **Yes** bolo. Rating thodi upar aa sakti hai,
+  jo theek hai — galat jawab dena app hatwa sakta hai.
+- Users can interact / communicate: **Yes** — sirf preset emoji aur fixed phrases (free text chat nahi).
+- Shares user location: **No**. Digital purchases: **No**.
+
+**Target audience and content:** age groups **13–15, 16–17, 18+** (under 13 mat chunna). "Appeals to children?"
+→ No (app pehli launch par age poochta hai aur under-13 ko rokta hai).
+
+**News app:** No. **COVID / Government / Financial features:** No. **Health:** No.
+
+**Data safety:**
+| Sawal | Jawab |
 |---|---|
-| `ANDROID_KEYSTORE_BASE64` | contents of `ludo-upload.b64` |
-| `ANDROID_KEYSTORE_PASSWORD` | the keystore password you typed |
-| `ANDROID_KEY_ALIAS` | `ludo` |
-| `ANDROID_KEY_PASSWORD` | the key password (same as keystore password if you pressed Enter) |
+| Collects or shares user data? | Collects: Yes. Shares with third parties: **No** |
+| Encrypted in transit? | Yes (https server zaroori) |
+| Users can request deletion? | Yes |
+| Account creation | "Account created automatically (guest)". **Delete account URL:** `…/privacy-policy.html#delete-account` |
+| Personal info → **Name** (nickname) | Collected; purpose: App functionality, Account management; not optional-shared |
+| Personal info → **User IDs** (Player ID, account id) | Collected; App functionality, Account management, Fraud prevention |
+| App activity → **Other user-generated content / in-game actions** (moves, coins, game progress, offline game board) | Collected; App functionality, Analytics = No |
+| Device or other IDs (random app-generated device ID) | Collected; App functionality, Account management, Fraud prevention |
+| Location, contacts, photos, messages, financial, health | **Not collected** |
 
-Keep `ludo-upload.jks` and the passwords backed up somewhere safe. Never commit
-them.
+IP address sirf connection ke liye server dekhta hai aur logs 30 din tak — ise "Device or other IDs" ke saath
+Fraud prevention me cover karo.
 
-## 3. Build
+## 8. Rules jo hamesha follow karne hain
 
-GitHub → **Actions → Build Android app → Run workflow**. When it finishes,
-download from the run's **Artifacts**:
-
-- `ludo-mintly-release-aab` → the `.aab` you upload to Play Console
-- `ludo-mintly-debug-apk` → install on your phone to test (it's named "Ludo Mintly (Test)" and can live next to the Play version)
-
-Each run gets a higher `versionCode` automatically, which Play needs for every
-new upload.
-
-## 4. Privacy policy page **[YOU]**
-
-Edit `docs/privacy-policy.html` and replace `[YOUR SUPPORT EMAIL]`. Then
-GitHub → **Settings → Pages** → Source "Deploy from a branch", branch `main`,
-folder `/docs`. The policy is then at
-`https://kuldeep93507.github.io/mintly-reward/privacy-policy.html` (already
-linked from the app's Settings screen).
-
-## 5. Play Console **[YOU]**
-
-1. Create a developer account at <https://play.google.com/console> (one-time
-   US$25, identity verification).
-2. **Create app** → name "Ludo Mintly", Game, Free.
-3. **Store listing**
-   - Short description: *Classic Ludo with friends, family and players online. Free coins every day!*
-   - Full description: modes (vs Computer, Pass & Play, Online 2/4 players,
-     Play with Friends via room code), daily rewards, emojis, leaderboards.
-     Say that coins are free and have no cash value.
-   - App icon: `docs/store/icon-512.png`
-   - Feature graphic: `docs/store/feature-graphic-1024x500.png`
-   - Phone screenshots (at least 2): `docs/screenshots/`
-4. **App content**
-   - Privacy policy: the URL from step 4.
-   - Ads: No.
-   - App access: all features available without login.
-   - Content rating (IARC questionnaire): answer honestly. Players stake free
-     virtual coins on matches, so answer the "simulated gambling" question
-     truthfully. There's no free-text chat, only preset emojis and phrases.
-   - Target audience: 13+ (keeps the app out of the Families programme).
-   - Data safety: collects *Device or other IDs* (guest account), *User IDs /
-     name* (nickname), *App activity: in-game progress*. Not shared with third
-     parties, encrypted in transit, and users can request deletion (in-app +
-     email).
-   - Account deletion URL: the privacy policy URL (it explains in-app deletion
-     and the email fallback).
-5. **Closed testing** — new *personal* developer accounts must run a closed
-   test with **at least 12 testers opted in for 14 days in a row** before they
-   can apply for production. Create a Closed testing track, upload the AAB,
-   add testers' Gmail addresses, share the opt-in link, and keep them
-   installed for 14 days.
-6. **Production** → apply for access → create a release with the latest AAB →
-   roll out.
-
-## Rules to stay inside
-
-- Keep coins free: no buying coins with money, and no withdrawing them as
-  money, gift cards or recharge. India's Online Gaming Act 2025 bans real-money
-  games.
-- Don't use "Ludo King" or other brands' names, logos or artwork in the app or
-  listing.
-- Every Play upload needs targetSdk 36 or higher from 31 Aug 2026 (already set).
+- Coins sirf free: coin khareedna, cash/gift card/recharge me badalna **kabhi nahi** (India me online money game ban).
+- Production par `ONLINE_GAME_CONTROL=0`. Asli players ke online match ka dice ya winner kabhi mat badlo.
+- Listing ya app me "Ludo King" ya kisi aur brand ka naam/logo/artwork nahi.
+- "Guaranteed win", "earn money", "real cash" jaise shabd listing me kabhi nahi.
+- Player complaints ka jawab 24 ghante me acknowledge, 15 din me solve (privacy policy me yahi promise hai).
+- Har naye Play upload par targetSdk latest requirement ke hisaab se (abhi 36).
