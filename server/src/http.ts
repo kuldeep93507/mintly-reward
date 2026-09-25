@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve, sep } from 'node:path';
-import { PROTOCOL_VERSION, type GlobalTheme, type ServerConfig } from '@ludo/engine';
+import { PROTOCOL_VERSION, type GlobalTheme, type ServerConfig, isOffensiveName } from '@ludo/engine';
 import { type Config, clientIp } from './config.js';
 import type { Db } from './db.js';
 import type { Auth } from './auth.js';
@@ -130,7 +130,8 @@ export function createHandler(d: HttpDeps) {
           signups.set(ip, { n: f.n + 1, since: f.since });
         }
         if (!u) {
-          const name = sanitizeName(body.name) ?? defaultName();
+          const wanted = sanitizeName(body.name);
+          const name = wanted && !isOffensiveName(wanted) ? wanted : defaultName();
           const avatar = validAvatar(body.avatar) ? body.avatar : Math.floor(Math.random() * 12);
           try {
             u = db.createUser(deviceId, name, avatar);
@@ -154,6 +155,7 @@ export function createHandler(d: HttpDeps) {
         if (body.name !== undefined) {
           const n = sanitizeName(body.name);
           if (!n) throw new HttpError(400, 'Invalid name');
+          if (isOffensiveName(n)) throw new HttpError(400, 'Please choose a friendlier name');
           fields.name = n;
         }
         if (body.avatar !== undefined) {

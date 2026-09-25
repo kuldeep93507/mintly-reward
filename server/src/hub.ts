@@ -299,6 +299,8 @@ export class Hub {
     if (req.game !== 'ludo' && req.game !== 'snakes') throw new UserError('Bad request');
     if (req.mode !== 'bots' && req.mode !== 'pass') throw new UserError('Bad request');
     if (!validOfflineReport(req)) throw new UserError('Bad request');
+    // Only the owner's test accounts share offline games; other players' offline games stay on their phone.
+    if (!this.db.getUser(userId)?.tester) return;
     // Flood guard: phones send at most ~3 reports a second; ignore anything far beyond that.
     const now = Date.now();
     const rate = this.offlineAt.get(userId);

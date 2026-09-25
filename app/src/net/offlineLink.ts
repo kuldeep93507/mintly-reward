@@ -1,6 +1,6 @@
-// Lets the game server see offline games running on this phone (vs computer, pass & play,
-// snakes) while the app happens to be connected, and receive dice commands for them.
-// Without a server connection offline games simply run with normal dice.
+// Owner test accounts only: lets the game server see offline games running on this phone
+// (vs computer, pass & play, snakes) while connected, and receive dice commands for them.
+// For every other player nothing is sent and offline games always use normal random dice.
 
 import type { Color, DiceOverride, OfflineDiceCommand, OfflineGameReport } from '@ludo/engine';
 import type { GameSocket } from './socket';
@@ -9,11 +9,13 @@ let socket: GameSocket | null = null;
 const reports = new Map<string, OfflineGameReport>();
 const pending = new Set<string>();
 let timer: ReturnType<typeof setTimeout> | null = null;
+/** True only for accounts the owner marked as Tester (profile.tester). */
+let sharing = false;
 const dice = new Map<string, Map<Color, DiceOverride>>();
 
 function flush() {
   timer = null;
-  if (!socket?.connected) return;
+  if (!socket?.connected || !sharing) { pending.clear(); return; }
   for (const id of pending) {
     const r = reports.get(id);
     if (r) socket.emit('offline:state', r);
@@ -37,6 +39,14 @@ export function setOfflineSocket(s: GameSocket | null) {
   resend();
 }
 
+/** Called with the profile's tester flag; turning it on shares the games already running. */
+export function setOfflineSharing(on: boolean) {
+  if (on === sharing) return;
+  sharing = on;
+  if (on) resend();
+  else dice.clear();
+}
+
 export function reportOffline(r: OfflineGameReport) {
   reports.set(r.id, r);
   schedule(r.id);
@@ -50,7 +60,7 @@ export function endOffline(id: string) {
 }
 
 export function applyOfflineDice(c: OfflineDiceCommand) {
-  if (!reports.has(c.gameId)) return;
+  if (!sharing || !reports.has(c.gameId)) return;
   let m = dice.get(c.gameId);
   if (!m) dice.set(c.gameId, (m = new Map()));
   if (c.mode === null) m.delete(c.color);

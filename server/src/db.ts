@@ -20,6 +20,7 @@ export interface UserRow {
   created_at: number;
   player_id: string;
   banned: number;
+  tester: number;
 }
 
 const PID_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -108,6 +109,7 @@ export class Db {
     const cols = new Set((this.sql.prepare('PRAGMA table_info(users)').all() as { name: string }[]).map((c) => c.name));
     if (!cols.has('player_id')) this.sql.exec('ALTER TABLE users ADD COLUMN player_id TEXT');
     if (!cols.has('banned')) this.sql.exec('ALTER TABLE users ADD COLUMN banned INTEGER NOT NULL DEFAULT 0');
+    if (!cols.has('tester')) this.sql.exec('ALTER TABLE users ADD COLUMN tester INTEGER NOT NULL DEFAULT 0');
     const missing = this.sql.prepare('SELECT id FROM users WHERE player_id IS NULL').all() as { id: string }[];
     for (const { id } of missing) this.sql.prepare('UPDATE users SET player_id = ? WHERE id = ?').run(this.freePlayerId(), id);
     this.sql.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_player_id ON users (player_id)');
@@ -228,6 +230,10 @@ export class Db {
     return this.sql.prepare('SELECT * FROM users WHERE player_id = ?').get(playerId.trim().toUpperCase()) as UserRow | undefined;
   }
 
+  setTester(userId: string, tester: boolean): void {
+    this.sql.prepare('UPDATE users SET tester = ? WHERE id = ?').run(tester ? 1 : 0, userId);
+  }
+
   setBanned(userId: string, banned: boolean): void {
     this.sql.prepare('UPDATE users SET banned = ? WHERE id = ?').run(banned ? 1 : 0, userId);
   }
@@ -306,7 +312,7 @@ export class Db {
     const cooldown = cfg.freeCoinsCooldownMinutes * 60_000;
     const nextFreeCoinsAt = u.last_free_at !== null && now - u.last_free_at < cooldown ? u.last_free_at + cooldown : null;
     return {
-      id: u.id, playerId: u.player_id, name: u.name, avatar: u.avatar, coins: u.coins, wins: u.wins, games: u.games, xp: u.xp,
+      id: u.id, tester: !!u.tester, playerId: u.player_id, name: u.name, avatar: u.avatar, coins: u.coins, wins: u.wins, games: u.games, xp: u.xp,
       level: levelForXp(u.xp), dailyStreak: u.daily_streak, nextDailyAt, nextFreeCoinsAt,
     };
   }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { io as ioc, type Socket } from 'socket.io-client';
-import { newGame, type GameInfo, type GameState, type OwnerSnapshot, type OwnerUser, type RoomInfo } from '@ludo/engine';
+import { newGame, type GameInfo, type GameState, type OfflineGameReport, type OwnerSnapshot, type OwnerUser, type RoomInfo } from '@ludo/engine';
 import { type Client, api, connect, emitAck, guest, once, startServer, type TestServer } from './helpers.js';
 
 let srv: TestServer | undefined;
@@ -180,8 +180,17 @@ describe('admin (owner) control', () => {
     srv = await startServer({ ownerKey: KEY });
     const a = await player(srv.url);
     const s0 = newGame(['red', 'yellow']);
-    a.s.emit('offline:state', { id: 'g1', game: 'ludo', mode: 'bots', seats: [{ color: 'red', name: 'Me', isBot: false, isYou: true }, { color: 'yellow', name: 'CPU', isBot: true, isYou: false }], state: s0 });
+    const report: OfflineGameReport = { id: 'g1', game: 'ludo', mode: 'bots', seats: [{ color: 'red', name: 'Me', isBot: false, isYou: true }, { color: 'yellow', name: 'CPU', isBot: true, isYou: false }], state: s0 };
     const adm = await admin(srv.url, KEY);
+    // A normal player's offline games are never shared with the server.
+    a.s.emit('offline:state', report);
+    await new Promise((r) => setTimeout(r, 150));
+    expect((await adminAck<{ ok: boolean; snapshot: OwnerSnapshot }>(adm, 'owner:snapshot')).snapshot.offline).toEqual([]);
+    // The owner marks their own phone as a test account: now it shows up and can be controlled.
+    const prof = once(a.s, 'profile');
+    expect((await adminAck<{ ok: boolean; user: { tester: boolean } }>(adm, 'owner:tester', { userId: a.id, tester: true })).user.tester).toBe(true);
+    expect((await prof).tester).toBe(true);
+    a.s.emit('offline:state', report);
     let snap: OwnerSnapshot | undefined;
     for (let i = 0; i < 20 && !snap?.offline.length; i++) {
       snap = (await adminAck<{ ok: boolean; snapshot: OwnerSnapshot }>(adm, 'owner:snapshot')).snapshot;

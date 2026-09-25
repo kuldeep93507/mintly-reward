@@ -12,12 +12,16 @@ Store listing ka text `docs/store/listing.md` me hai.
 - In-app **Delete account** (Settings) + bina app ke email se deletion (privacy policy `#delete-account`).
 - Pehli baar khulne par **age screen** (13+), **break reminder** (1 ghante par), **Contact us / Report a problem**.
 - Online matches me dice server random deta hai; owner ka online control `ONLINE_GAME_CONTROL` se **default band**.
+- Offline remote control sirf **Tester** accounts par (aapke apne phone, admin → Users → Make tester). Aam players
+  ka offline game server par jaata hi nahi.
+- Nickname filter: gaali wale naam (English + Hindi) mana. Release APK me sirf zaroori permissions
+  (INTERNET, POST_NOTIFICATIONS, VIBRATE) — exact-alarm/boot/wake-lock hata diye.
 - Icon 512×512 aur feature graphic 1024×500: `docs/store/`.
 
 ## 1. Support email chuno **[AAP]**
 
 Ek email jo aap roz check karte ho (player complaints, deletion requests, Play Console contact).
-- `docs/privacy-policy.html` me 3 jagah `[YOUR SUPPORT EMAIL]` ko us email se badlo.
+- ✅ Ho gaya: `sebastianfinnley5@gmail.com` (Play Console wala) privacy policy aur app ke Contact button me hai.
 - GitHub → repo **Settings → Secrets and variables → Actions → Variables** me `SUPPORT_EMAIL` = wahi email
   (app ke "Contact us" button me yahi jaata hai).
 
@@ -40,11 +44,11 @@ base64 -w0 ludo-upload.jks > ludo-upload.b64
 GitHub **Secrets**: `ANDROID_KEYSTORE_BASE64` (b64 file ka content), `ANDROID_KEYSTORE_PASSWORD`,
 `ANDROID_KEY_ALIAS` = `ludo`, `ANDROID_KEY_PASSWORD`. `.jks` aur passwords ka backup rakho, commit kabhi nahi.
 
-## 4. Privacy policy live karo **[AAP]**
+## 4. Privacy policy — ✅ live
 
-Kaam `main` branch par merge hone ke baad: GitHub → **Settings → Pages** → Deploy from a branch → `main` → `/docs`.
-URL: `https://kuldeep93507.github.io/mintly-reward/privacy-policy.html` (app ki Settings me yahi link hai).
-Browser me khol ke check karo ki email sahi dikh raha hai.
+Google Sites par publish ho chuki hai: https://sites.google.com/view/ludomintlyprivacypolicy
+(site "Ludo Mintly Privacy Policy", aapke Google account ke Sites me). App ki Settings me yahi link hai.
+Policy badalni ho to Google Sites me edit karke **Publish** dabao, aur `docs/privacy-policy.html` me bhi wahi badlav karo.
 
 ## 5. Build
 
@@ -64,10 +68,10 @@ Agar log me "SERVER_URL is not https" warning aaye to AAB upload mat karna, pehl
    test phone se lo (home, game board, result screen, online lobby). Admin app ke screenshots **mat** daalna.
    Category: **Board**. Tags: Board, Ludo, Multiplayer.
 4. **App content** — neeche wale exact jawab.
-5. **Closed testing (zaroori)**: naye personal account par **kam se kam 12 testers, lagatar 14 din** opted-in.
-   Closed testing track banao → AAB upload → testers ke Gmail list → opt-in link share → sab 14 din install rakhein
-   aur thoda khelein. Beech me opt-out kiya to unka count nahi hoga.
-6. 14 din baad **Apply for production** → release banao → roll out. Review me kuch din lag sakte hain.
+5. **Closed testing**: aapka Play Console **MMB GAMES — Organization account** hai, isliye 12 testers × 14 din
+   wala niyam (sirf naye *personal* accounts ke liye) **lagu nahi hota**. Phir bhi pehle **Internal testing**
+   track par AAB daal ke 2–3 phones par ek din chala lo, phir production.
+6. **Production** → release banao → roll out. Review me kuch din lag sakte hain.
 
 ## 7. App content — exact jawab
 
@@ -98,10 +102,10 @@ Agar log me "SERVER_URL is not https" warning aaye to AAB upload mat karna, pehl
 | Collects or shares user data? | Collects: Yes. Shares with third parties: **No** |
 | Encrypted in transit? | Yes (https server zaroori) |
 | Users can request deletion? | Yes |
-| Account creation | "Account created automatically (guest)". **Delete account URL:** `…/privacy-policy.html#delete-account` |
+| Account creation | "Account created automatically (guest)". **Delete account URL:** `https://sites.google.com/view/ludomintlyprivacypolicy` ("Retention and account deletion" section) |
 | Personal info → **Name** (nickname) | Collected; purpose: App functionality, Account management; not optional-shared |
 | Personal info → **User IDs** (Player ID, account id) | Collected; App functionality, Account management, Fraud prevention |
-| App activity → **Other user-generated content / in-game actions** (moves, coins, game progress, offline game board) | Collected; App functionality, Analytics = No |
+| App activity → **Other in-app actions** (online moves, coins, game progress) | Collected; App functionality. (Offline games aam players ke phone se bahar nahi jaate.) |
 | Device or other IDs (random app-generated device ID) | Collected; App functionality, Account management, Fraud prevention |
 | Location, contacts, photos, messages, financial, health | **Not collected** |
 

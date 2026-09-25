@@ -122,3 +122,5 @@ body { background: radial-gradient(1200px 500px at 50% -200px, #12314a 0%, var(-
 button.give { border-color: rgba(52,211,153,0.5); color: var(--ok); font-weight: 700; }
 .card { transition: border-color 150ms; }
 .card:hover { border-color: #33405e; }
+.tester-tag { color: var(--accent); font-weight: 700; }
+button.on-tester { background: rgba(34,211,238,0.15); border-color: var(--accent); color: var(--accent); font-weight: 700; }

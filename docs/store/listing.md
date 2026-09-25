@@ -40,7 +40,7 @@ Questions or feedback? Settings → Contact us.
 Game → Board
 
 ## Contact details
-Email: (your support email) · Website: (optional) · Privacy policy: https://kuldeep93507.github.io/mintly-reward/privacy-policy.html
+Email: sebastianfinnley5@gmail.com · Website: (optional) · Privacy policy: https://sites.google.com/view/ludomintlyprivacypolicy
 
 ## What's new (first release)
 First release: online matches, private rooms with friends, vs computer, pass & play and Snakes & Ladders.

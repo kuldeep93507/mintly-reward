@@ -134,8 +134,9 @@ export function OfflinePanel({ socket, snap, refresh, flash }: Ctx) {
   return (
     <div className="stack">
       <p className="note">
-        Offline games (vs Computer, Pass &amp; Play, Snakes) show up here only while that phone is connected to this server.
-        Dice commands are delivered to the phone and applied on the next roll of that colour.
+        Remote control works only on <b>Tester</b> accounts (your own phones: Users → Make tester). Their offline games
+        (vs Computer, Pass &amp; Play, Snakes) show up here while the phone is connected; dice commands apply on the next
+        roll of that colour. Normal players' offline games are never sent to the server.
       </p>
       {snap.offline.length === 0 && <div className="empty">No offline games reported.</div>}
       {snap.offline.map((o: OwnerOfflineGame) => {

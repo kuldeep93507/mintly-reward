@@ -15,6 +15,11 @@ export const NAME_MAX = 16;
 
 export interface Profile {
   id: string;
+  /**
+   * Owner-marked test account (the owner's own phones). Only test accounts send offline game
+   * boards to the server and accept owner dice commands; everyone else's offline games stay private.
+   */
+  tester?: boolean;
   /** Short public id friends type in to send an invite (e.g. "K7QX2M"). */
   playerId: string;
   name: string;
@@ -289,6 +294,7 @@ export interface OwnerOfflineGame extends OfflineGameReport {
 
 export interface OwnerUser {
   id: string;
+  tester: boolean;
   playerId: string;
   name: string;
   avatar: number;
@@ -346,6 +352,8 @@ export interface OwnerClientToServer {
   'owner:coins': (req: { userId: string; amount: number }, ack: (res: Ack<{ user: OwnerUser }>) => void) => void;
   'owner:rename': (req: { userId: string; name: string }, ack: (res: Ack<{ user: OwnerUser }>) => void) => void;
   'owner:ban': (req: { userId: string; banned: boolean }, ack: (res: Ack<{ user: OwnerUser }>) => void) => void;
+  /** Mark/unmark the owner's own test account (enables offline game remote control for it). */
+  'owner:tester': (req: { userId: string; tester: boolean }, ack: (res: Ack<{ user: OwnerUser }>) => void) => void;
   'owner:theme': (req: GlobalTheme, ack: (res: Ack) => void) => void;
   'owner:config': (req: OwnerConfigPatch, ack: (res: Ack<{ config: ServerConfig }>) => void) => void;
   'owner:notice': (req: { message: string }, ack: (res: Ack) => void) => void;

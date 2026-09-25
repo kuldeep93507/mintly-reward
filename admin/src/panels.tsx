@@ -25,6 +25,10 @@ function UserRow({ u, ctx, onChange }: { u: OwnerUser; ctx: Ctx; onChange: (u: O
     const r = await call<{ user: OwnerUser }>(ctx.socket, 'owner:rename', { userId: u.id, name });
     if (r.ok) { onChange(r.user); setEditing(false); ctx.flash('Renamed'); } else ctx.flash(r.error, true);
   };
+  const tester = async () => {
+    const r = await call<{ user: OwnerUser }>(ctx.socket, 'owner:tester', { userId: u.id, tester: !u.tester });
+    if (r.ok) { onChange(r.user); ctx.flash(r.user.tester ? `${u.name} is now a Tester (remote control on)` : `${u.name} is a normal player again`); } else ctx.flash(r.error, true);
+  };
   const ban = async () => {
     setConfirm(null);
     const r = await call<{ user: OwnerUser }>(ctx.socket, 'owner:ban', { userId: u.id, banned: !u.banned });
@@ -45,6 +49,7 @@ function UserRow({ u, ctx, onChange }: { u: OwnerUser; ctx: Ctx; onChange: (u: O
         <span className="muted">
           <span className="mono">{u.playerId}</span> · Lv {u.level} · {u.wins}/{u.games} wins · <span className={u.online ? 'ok' : ''}>{u.online ? 'online' : 'offline'}</span>
           {u.banned && <span className="bad"> · banned</span>}
+          {u.tester && <span className="tester-tag"> · TESTER</span>}
         </span>
       </div>
       <div className="user-actions">
@@ -55,6 +60,7 @@ function UserRow({ u, ctx, onChange }: { u: OwnerUser; ctx: Ctx; onChange: (u: O
         <input className="amt" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, ''))} inputMode="numeric" aria-label="Amount" />
         <button className="small give" disabled={busy} onClick={() => void coins(1)}>+ Give</button>
         <button className="small ghost" disabled={busy} onClick={() => setConfirm('take')}>− Take</button>
+        <button className={`small ${u.tester ? 'on-tester' : ''}`} onClick={() => void tester()} title="Only Tester accounts (your own phones) share offline games and accept remote dice">{u.tester ? 'Tester ✓' : 'Make tester'}</button>
         <button className={`small ${u.banned ? '' : 'danger'}`} onClick={() => (u.banned ? void ban() : setConfirm('ban'))}>{u.banned ? 'Unban' : 'Ban'}</button>
       </div>
       {confirm && (

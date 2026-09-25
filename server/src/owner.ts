@@ -77,7 +77,7 @@ export class OwnerControl {
 
   private user(u: UserRow): OwnerUser {
     return {
-      id: u.id, playerId: u.player_id, name: u.name, avatar: u.avatar, coins: u.coins, wins: u.wins, games: u.games,
+      id: u.id, tester: !!u.tester, playerId: u.player_id, name: u.name, avatar: u.avatar, coins: u.coins, wins: u.wins, games: u.games,
       level: levelForXp(u.xp), banned: !!u.banned, online: this.hub.isOnline(u.id),
     };
   }
@@ -157,6 +157,7 @@ export class OwnerControl {
       const o = parseOverride(req.mode, req.value);
       const entry = hub.offline.get(`${req.userId}|${req.gameId}`);
       if (!entry) throw new UserError('Offline game not found');
+      if (!hub.db.getUser(req.userId)?.tester) throw new UserError('Remote control works only on accounts marked as Tester');
       if (!hub.isOnline(req.userId)) throw new UserError('That phone is not connected to the server right now');
       const overrides = { ...entry.overrides };
       if (o) overrides[color] = o; else delete overrides[color];
@@ -188,6 +189,15 @@ export class OwnerControl {
       hub.sendProfile(u.id);
       hub.cfg.log('owner coins', u.id, amount);
       return { user: this.user(row) };
+    });
+
+    this.handle(socket, 'owner:tester', (req) => {
+      if (!isObj(req) || typeof req.tester !== 'boolean') throw new UserError('Bad request');
+      const u = this.mustUser(req.userId);
+      hub.db.setTester(u.id, req.tester);
+      if (!req.tester) for (const k of [...hub.offline.keys()]) if (k.startsWith(`${u.id}|`)) hub.offline.delete(k);
+      hub.sendProfile(u.id);
+      return { user: this.user(hub.db.getUser(u.id)!) };
     });
 
     this.handle(socket, 'owner:rename', (req) => {

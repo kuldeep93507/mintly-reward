@@ -172,3 +172,11 @@ describe('bots', () => {
     }
   });
 });
+
+describe('nickname filter', () => {
+  it('blocks abusive names and keeps normal ones', async () => {
+    const { isOffensiveName } = await import('../src/names.js');
+    for (const bad of ['Fuck off', 'ch0tiya', 'CHUTIYA king', 'mc', 'bc boy', 'Madarchod1', 'b1tch']) expect(isOffensiveName(bad), bad).toBe(true);
+    for (const ok of ['Player1234', 'Rahul', 'McQueen', 'abc', 'Grapes', 'Brandi', 'Kuldeep', 'chutney lover']) expect(isOffensiveName(ok), ok).toBe(false);
+  });
+});

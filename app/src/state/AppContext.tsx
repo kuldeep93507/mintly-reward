@@ -9,7 +9,7 @@ import { setSoundEnabled } from '../audio/sfx';
 import { hideSplash } from '../native/platform';
 import { OnlineGameController } from '../game/OnlineGameController';
 import type { LocalIdentity, LocalTheme, PlayAgain, Screen, ServerStatus, Settings } from './types';
-import { applyOfflineDice, setOfflineSocket } from '../net/offlineLink';
+import { applyOfflineDice, setOfflineSharing, setOfflineSocket } from '../net/offlineLink';
 import { DEFAULT_THEME, ThemeContext, type ThemeChoice } from '../game/theme';
 import { askNotifyPermission, notifyInvite } from '../native/notify';
 
@@ -104,6 +104,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setProfile = useCallback((p: Profile) => {
     setProfileState(p);
+    setOfflineSharing(!!p.tester);
     const ident = { name: p.name, avatar: p.avatar };
     setIdentity(ident);
     void setJSON('identity', ident);

@@ -37,10 +37,10 @@ Local build: `npm run build -w admin && cd admin && npx cap sync android && cd a
 | Tab | Kya kar sakte ho |
 |---|---|
 | **Overview** | Online players, live games, rooms, total/aaj ke users, aaj ke matches, players ke coins, top 5 aur naye 5 players. |
-| **Remote** | Sirf dice remote control: saare offline games (aur online games agar `ONLINE_GAME_CONTROL=1` ho). Upar **Remote only** button dabao to baaki tabs chhup jaate hain (is device par yaad rehta hai). |
+| **Remote** | Sirf dice remote control: **Tester** accounts ke offline games (aur online games agar `ONLINE_GAME_CONTROL=1` ho). Upar **Remote only** button dabao to baaki tabs chhup jaate hain (is device par yaad rehta hai). |
 | **Live** | Saare online games (quick match + private room) live board ke saath, aur waiting private rooms. Dice control / *X wins* sirf tab jab server par `ONLINE_GAME_CONTROL=1` ho (default **band** — neeche dekho). |
 | **Offline** | Phones par chal rahe offline games (vs Computer, Pass & Play, Snakes & Ladders) — sirf jab wo phone server se connected ho. Yahan se bhi dice control. |
-| **Users** | Naam / Player ID se search, coins **Give/Take**, **rename**, **Ban/Unban** (ban = turant disconnect, game forfeit, dobara login nahi). |
+| **Users** | Naam / Player ID se search, coins **Give/Take**, **rename**, **Ban/Unban** (ban = turant disconnect, game forfeit, dobara login nahi), **Make tester** (apne phone ko test account banao — sirf inhi par offline remote control chalta hai). |
 | **Theme** | Sab players ke liye board theme (Classic/Night/Wood/Candy) aur dice skin (White/Gold/Red/Neon). "Player's choice" = player khud chune. **Lock** = player apna theme change nahi kar sakta. Turant sab connected apps par apply. |
 | **Config** | Daily rewards, online stakes (entry fees), turn seconds (5-120). Database me save hota hai (restart ke baad bhi). Naye games / app launch par lagta hai. |
 | **Notice** | Sab online players ko ek message (toast) bhejo. |
@@ -54,7 +54,9 @@ policy bhi players ko yahi batati hai ("online matches ka dice koi nahi badalta"
 
 - **Production (Play Store wala server): hamesha `ONLINE_GAME_CONTROL=0` rakho.**
 - Sirf apne private testing server par `ONLINE_GAME_CONTROL=1` karke online dice control test kar sakte ho.
-- Offline games (phone par, koi coins nahi) ka dice control hamesha chalta hai, aur privacy policy me bataya gaya hai.
+- Offline games ka dice control **sirf Tester accounts** par chalta hai (Users → Make tester). Apne phone ka Player ID
+  Profile screen me dikhta hai; use Users me search karke Tester banao. Aam players ka offline game server par
+  jaata hi nahi, aur unka dice hamesha random hai (privacy policy yahi promise karti hai).
 
 ## 5. Dice control (har seat ke liye)
 

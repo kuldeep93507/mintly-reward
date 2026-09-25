@@ -1,8 +1,8 @@
 // App-wide constants.
 export const APP_VERSION = '1.0.0';
 /** Support / grievance contact shown in Settings and the privacy policy. Set before publishing. */
-export const SUPPORT_EMAIL: string = (import.meta.env.VITE_SUPPORT_EMAIL as string | undefined) || 'support@mintly.example';
-export const PRIVACY_POLICY_URL = 'https://kuldeep93507.github.io/mintly-reward/privacy-policy.html';
+export const SUPPORT_EMAIL: string = (import.meta.env.VITE_SUPPORT_EMAIL as string | undefined) || 'sebastianfinnley5@gmail.com';
+export const PRIVACY_POLICY_URL = 'https://sites.google.com/view/ludomintlyprivacypolicy';
 export const DEFAULT_SERVER_URL: string =
   (import.meta.env.VITE_SERVER_URL as string | undefined) || 'http://localhost:3000';
 
