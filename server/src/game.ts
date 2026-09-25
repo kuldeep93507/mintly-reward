@@ -140,7 +140,13 @@ export class GameSession {
   private safe(fn: () => void): void {
     this.timer = null;
     if (this.over || this.hub.closed) return;
-    try { fn(); } catch (e) { this.hub.cfg.log('game error', this.id, e); }
+    try {
+      fn();
+    } catch (e) {
+      this.hub.cfg.log('game error', this.id, e);
+      // Never leave a game without a running timer: it would freeze with the stakes locked.
+      if (!this.timer && !this.over) this.arm();
+    }
   }
 
   private botStep(): void {
@@ -155,14 +161,13 @@ export class GameSession {
     if (s.phase === 'move' && currentPlayer(s).color === color) s = applyMove(s, chooseMove(s, 'normal'));
     const missed = (this.missed[color] ?? 0) + 1;
     this.missed = { ...this.missed, [color]: missed };
-    if (missed >= this.hub.cfg.maxMissedTurns) {
-      s = applyLeave(s, color);
-      const seat = this.seatByColor(color);
-      this.hub.cfg.log('game', this.id, color, 'removed for inactivity');
-      this.hub.emitToRoom(this.room, 'notice', { message: `${seat.name} was removed for missing ${missed} turns` });
-      this.hub.releaseUser(seat.userId, this);
-    }
-    this.commit(s);
+    if (missed < this.hub.cfg.maxMissedTurns) return this.commit(s);
+    const seat = this.seatByColor(color);
+    this.hub.cfg.log('game', this.id, color, 'removed for inactivity');
+    this.hub.emitToRoom(this.room, 'notice', { message: `${seat.name} was removed for missing ${missed} turns` });
+    // Broadcast the final state before dropping the player from the game room, so their board is not left stale.
+    this.commit(applyLeave(s, color));
+    this.hub.releaseUser(seat.userId, this);
   }
 
   /** A human roll/move. Throws RuleError / Error with a user-facing message. */
@@ -171,6 +176,8 @@ export class GameSession {
     const seat = this.seatOf(userId);
     if (!seat) throw new UserError('You are not in this game');
     if (this.current().userId !== userId) throw new UserError('Not your turn');
+    // Check the phase before rollValue(): it uses up a one-time owner dice override.
+    if (action.type === 'roll' && this.state.phase !== 'roll') throw new UserError('Not time to roll');
     const next = action.type === 'roll' ? applyRoll(this.state, this.rollValue()) : applyMove(this.state, action.token);
     if (this.missed[seat.color]) this.missed = { ...this.missed, [seat.color]: 0 };
     this.commit(next);
@@ -200,7 +207,7 @@ export class GameSession {
     this.clearTimer();
     const ranking = this.state.ranking;
     const payouts: Partial<Record<Color, number>> = {};
-    const results: { userId: string; payout: number; rank: number }[] = [];
+    const results: { userId: string; payout: number; rank: number; counted: boolean }[] = [];
     ranking.forEach((color, i) => {
       const seat = this.seatByColor(color);
       if (seat.isBot || !this.hub.db.getUser(seat.userId)) return;
@@ -208,7 +215,8 @@ export class GameSession {
       const left = this.state.players.find((p) => p.color === color)?.out;
       const payout = left ? 0 : this.prizes[i] ?? 0;
       payouts[color] = payout;
-      results.push({ userId: seat.userId, payout, rank: i + 1 });
+      // Free games and players who left do not count towards wins/XP (stops leaderboard farming).
+      results.push({ userId: seat.userId, payout, rank: i + 1, counted: !left && this.stake > 0 });
     });
     try {
       this.hub.db.settleGame(results, this.id);

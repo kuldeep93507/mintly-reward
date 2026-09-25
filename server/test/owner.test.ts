@@ -64,6 +64,17 @@ describe('admin (owner) control', () => {
     expect(ok.connected).toBe(true);
   });
 
+  it('refuses online match control unless ONLINE_GAME_CONTROL is on (the production default)', async () => {
+    srv = await startServer({ ownerKey: KEY, onlineGameControl: false });
+    const { ia } = await roomGame(srv.url);
+    const adm = await admin(srv.url, KEY);
+    const snap = await adminAck<{ ok: boolean; snapshot: OwnerSnapshot }>(adm, 'owner:snapshot');
+    expect(snap.snapshot.onlineControl).toBe(false);
+    const dice = await adminAck<{ ok: boolean; error: string }>(adm, 'owner:dice', { gameId: ia.gameId, color: 'red', value: 6, mode: 'once' });
+    expect(dice).toMatchObject({ ok: false, error: expect.stringContaining('turned off') });
+    expect((await adminAck(adm, 'owner:endGame', { gameId: ia.gameId, winner: 'red' })).ok).toBe(false);
+  });
+
   it('forces dice for any seat; values are used and nothing leaks to players', async () => {
     srv = await startServer({ ownerKey: KEY, rollDie: () => 1 });
     const { a, b, ia, ib } = await roomGame(srv.url);

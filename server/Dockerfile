@@ -25,8 +25,9 @@ RUN npm ci --workspace server --omit=dev --ignore-scripts && npm cache clean --f
 COPY --from=build /repo/server/dist server/dist
 COPY --from=build /repo/admin/dist admin/dist
 RUN mkdir -p /data && chown node:node /data
-USER node
 VOLUME /data
 EXPOSE 3000
 WORKDIR /repo/server
-CMD ["node", "--disable-warning=ExperimentalWarning", "dist/index.js"]
+# Hosted disks (e.g. Render) are mounted over /data at runtime and may be owned by root:
+# fix the owner, then drop to the unprivileged node user.
+CMD ["sh", "-c", "chown -R node:node /data 2>/dev/null; exec setpriv --reuid=node --regid=node --init-groups node --disable-warning=ExperimentalWarning dist/index.js"]

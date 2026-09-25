@@ -10,7 +10,7 @@ export interface TestServer { app: App; url: string; close(): Promise<void> }
 const quiet = () => {};
 
 export async function startServer(o: Partial<Config> = {}): Promise<TestServer> {
-  const app = createApp({ dbFile: ':memory:', animGraceMs: 0, botDelayMs: 5, turnSeconds: 10, gameCleanupMs: 50, queueTickMs: 50, log: quiet, ...o });
+  const app = createApp({ dbFile: ':memory:', onlineGameControl: true, animGraceMs: 0, botDelayMs: 5, turnSeconds: 10, gameCleanupMs: 50, queueTickMs: 50, log: quiet, ...o });
   const port = await app.listen(0, '127.0.0.1');
   const url = `http://127.0.0.1:${port}`;
   const clients: Client[] = [];

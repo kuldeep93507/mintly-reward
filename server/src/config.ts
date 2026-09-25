@@ -29,6 +29,16 @@ export interface Config {
   /** Delay before a finished game is dropped from memory. */
   gameCleanupMs: number;
   queueTickMs: number;
+  /** Behind a reverse proxy (Render, Caddy): take the client IP from X-Forwarded-For (TRUST_PROXY=1). */
+  trustProxy: boolean;
+  /**
+   * Owner dice control and "declare winner" for ONLINE matches between real players
+   * (ONLINE_GAME_CONTROL=1). Off by default: secretly changing the outcome of other people's
+   * matches misleads them and breaks store policies. Offline games and testing are unaffected.
+   */
+  onlineGameControl: boolean;
+  /** New guest accounts allowed per IP per hour (SIGNUPS_PER_HOUR, 0 = unlimited). */
+  signupsPerHour: number;
   /** Authoritative dice; injectable for tests. */
   rollDie: () => number;
   log: (...args: unknown[]) => void;
@@ -46,6 +56,16 @@ function list(name: string, def: number[]): number[] {
   if (!v) return def;
   const arr = v.split(',').map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n > 0);
   return arr.length ? arr : def;
+}
+
+/** Client IP of a request/handshake, honouring X-Forwarded-For only when TRUST_PROXY is on. */
+export function clientIp(cfg: Pick<Config, 'trustProxy'>, headers: Record<string, string | string[] | undefined>, direct: string | undefined): string {
+  if (cfg.trustProxy) {
+    const xff = headers['x-forwarded-for'];
+    const first = String(Array.isArray(xff) ? xff[0] : xff ?? '').split(',')[0].trim();
+    if (first) return first;
+  }
+  return direct ?? 'unknown';
 }
 
 export function loadConfig(overrides: Partial<Config> = {}): Config {
@@ -70,6 +90,9 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
     hostGraceSeconds: num('HOST_GRACE_SECONDS', 30),
     gameCleanupMs: 30_000,
     queueTickMs: 1000,
+    trustProxy: /^(1|true|yes)$/i.test(process.env.TRUST_PROXY ?? ''),
+    signupsPerHour: num('SIGNUPS_PER_HOUR', 20),
+    onlineGameControl: /^(1|true|yes)$/i.test(process.env.ONLINE_GAME_CONTROL ?? ''),
     rollDie: () => randomInt(1, 7),
     log: (...a) => console.log(new Date().toISOString(), ...a),
     ...overrides,

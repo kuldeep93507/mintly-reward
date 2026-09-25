@@ -79,8 +79,28 @@ export class Db {
       );
       CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS recent_players_user ON recent_players (user_id, played_at DESC);
+      CREATE TABLE IF NOT EXISTS open_games (id TEXT PRIMARY KEY, stake INTEGER NOT NULL, created_at INTEGER NOT NULL);
     `);
     this.migrate();
+    this.refundOpenGames();
+  }
+
+  /**
+   * Games live in memory, so a game still open when the server stopped or crashed was never settled.
+   * Give every player their entry fee back.
+   */
+  refundOpenGames(): number {
+    const open = this.sql.prepare('SELECT id FROM open_games').all() as { id: string }[];
+    for (const { id } of open) {
+      this.tx(() => {
+        const entries = this.sql.prepare("SELECT user_id, amount FROM coin_tx WHERE ref = ? AND reason = 'entry'").all(id) as { user_id: string; amount: number }[];
+        for (const e of entries) {
+          if (this.getUser(e.user_id)) this.addCoinsRaw(e.user_id, -e.amount, 'refund', id);
+        }
+        this.sql.prepare('DELETE FROM open_games WHERE id = ?').run(id);
+      });
+    }
+    return open.length;
   }
 
   /** Adds columns introduced after the first release and backfills them. */
@@ -178,22 +198,29 @@ export class Db {
         this.addCoinsRaw(id, -stake, 'entry', ref);
         paid.push(id);
       }
+      if (paid.length && stake > 0) this.sql.prepare('INSERT OR IGNORE INTO open_games (id, stake, created_at) VALUES (?, ?, ?)').run(ref, stake, Date.now());
     });
     return { paid, failed };
   }
 
   /** Refund entries (e.g. a game that could not start after all). */
   refund(userIds: string[], stake: number, ref: string): void {
-    this.tx(() => { for (const id of userIds) this.addCoinsRaw(id, stake, 'refund', ref); });
+    this.tx(() => {
+      for (const id of userIds) this.addCoinsRaw(id, stake, 'refund', ref);
+      this.sql.prepare('DELETE FROM open_games WHERE id = ?').run(ref);
+    });
   }
 
-  settleGame(results: { userId: string; payout: number; rank: number }[], ref: string): void {
+  /** `counted` false (free games, players who left) pays coins but does not add games/wins/XP. */
+  settleGame(results: { userId: string; payout: number; rank: number; counted?: boolean }[], ref: string): void {
     this.tx(() => {
       for (const r of results) {
         if (r.payout > 0) this.addCoinsRaw(r.userId, r.payout, r.rank === 1 ? 'win' : 'prize', ref);
+        if (r.counted === false) continue;
         this.sql.prepare('UPDATE users SET games = games + 1, wins = wins + ?, xp = xp + ? WHERE id = ?')
           .run(r.rank === 1 ? 1 : 0, 10 + (r.rank === 1 ? 30 : 0), r.userId);
       }
+      this.sql.prepare('DELETE FROM open_games WHERE id = ?').run(ref);
     });
   }
 
@@ -252,8 +279,23 @@ export class Db {
     return this.sql.prepare('SELECT amount, reason, ref FROM coin_tx WHERE user_id = ? ORDER BY id').all(userId) as never;
   }
 
+  /** Totals for the owner overview. `since` = start of "today" (epoch ms). */
+  stats(since: number): { users: number; newToday: number; banned: number; coins: number; matchesToday: number; matchesTotal: number; top: UserRow[]; newest: UserRow[] } {
+    const one = (q: string, ...a: (number | string)[]) => Number((this.sql.prepare(q).get(...a) as { n: number | null }).n ?? 0);
+    return {
+      users: one('SELECT COUNT(*) AS n FROM users'),
+      newToday: one('SELECT COUNT(*) AS n FROM users WHERE created_at >= ?', since),
+      banned: one('SELECT COUNT(*) AS n FROM users WHERE banned = 1'),
+      coins: one('SELECT SUM(coins) AS n FROM users'),
+      matchesToday: one("SELECT COUNT(DISTINCT ref) AS n FROM coin_tx WHERE reason = 'entry' AND created_at >= ?", since),
+      matchesTotal: one("SELECT COUNT(DISTINCT ref) AS n FROM coin_tx WHERE reason = 'entry'"),
+      top: this.sql.prepare('SELECT * FROM users WHERE banned = 0 ORDER BY wins DESC, coins DESC LIMIT 5').all() as unknown as UserRow[],
+      newest: this.sql.prepare('SELECT * FROM users ORDER BY created_at DESC LIMIT 5').all() as unknown as UserRow[],
+    };
+  }
+
   leaderboard(): LeaderboardEntry[] {
-    const rows = this.sql.prepare('SELECT id, name, avatar, xp, wins, coins FROM users ORDER BY wins DESC, coins DESC LIMIT 50').all() as unknown as UserRow[];
+    const rows = this.sql.prepare('SELECT id, name, avatar, xp, wins, coins FROM users WHERE banned = 0 ORDER BY wins DESC, coins DESC LIMIT 50').all() as unknown as UserRow[];
     return rows.map((r) => ({ id: r.id, name: r.name, avatar: r.avatar, level: levelForXp(r.xp), wins: r.wins, coins: r.coins }));
   }
 

@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { PROTOCOL_VERSION, type GlobalTheme, type ServerConfig } from '@ludo/engine';
-import type { Config } from './config.js';
+import { type Config, clientIp } from './config.js';
 import type { Db } from './db.js';
 import type { Auth } from './auth.js';
 import { HttpError, claimDaily, claimFree, defaultName, sanitizeName, validAvatar } from './profile.js';
@@ -91,6 +91,7 @@ async function serveAdmin(cfg: Config, raw: string, res: ServerResponse): Promis
 
 export function createHandler(d: HttpDeps) {
   const { cfg, db, auth } = d;
+  const signups = new Map<string, { n: number; since: number }>();
 
   function requireUser(req: IncomingMessage): string {
     const h = req.headers.authorization;
@@ -119,6 +120,15 @@ export function createHandler(d: HttpDeps) {
           throw new HttpError(400, 'Invalid deviceId');
         }
         let u = db.getByDevice(deviceId);
+        if (!u && cfg.signupsPerHour > 0) {
+          // Limit new accounts per IP so free starting coins cannot be farmed.
+          const ip = clientIp(cfg, req.headers, req.socket.remoteAddress);
+          const now = Date.now();
+          for (const [k, v] of signups) if (now - v.since >= 3_600_000) signups.delete(k);
+          const f = signups.get(ip) ?? { n: 0, since: now };
+          if (f.n >= cfg.signupsPerHour) throw new HttpError(429, 'Too many new accounts from this network, try later');
+          signups.set(ip, { n: f.n + 1, since: f.since });
+        }
         if (!u) {
           const name = sanitizeName(body.name) ?? defaultName();
           const avatar = validAvatar(body.avatar) ? body.avatar : Math.floor(Math.random() * 12);

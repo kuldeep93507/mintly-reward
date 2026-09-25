@@ -300,9 +300,26 @@ export interface OwnerUser {
   online: boolean;
 }
 
+/** Server-wide numbers for the owner's overview page. */
+export interface OwnerStats {
+  users: number;
+  newToday: number;
+  banned: number;
+  /** Free virtual coins held by all players. */
+  coins: number;
+  /** Paid online matches started today / in total. */
+  matchesToday: number;
+  matchesTotal: number;
+  top: OwnerUser[];
+  newest: OwnerUser[];
+}
+
 export interface OwnerSnapshot {
   now: number;
   online: number;
+  /** Whether dice control / declare winner is enabled for online matches (ONLINE_GAME_CONTROL). */
+  onlineControl: boolean;
+  stats: OwnerStats;
   games: OwnerGame[];
   rooms: OwnerRoom[];
   offline: OwnerOfflineGame[];

@@ -43,6 +43,8 @@ export class Hub {
   private lastInvite = new Map<string, number>();
   /** Offline games (vs computer / pass & play / snakes) reported by connected apps, keyed "userId|gameId". */
   readonly offline = new Map<string, OfflineEntry>();
+  private joinTries = new Map<string, { n: number; since: number }>();
+  private offlineAt = new Map<string, { n: number; since: number }>();
   private cleanupTimers = new Set<NodeJS.Timeout>();
   closed = false;
 
@@ -176,7 +178,10 @@ export class Hub {
     const gameId = isObj(req) ? req.gameId : undefined;
     if (typeof gameId !== 'string') throw new UserError('Bad request');
     const g = this.games.get(gameId);
-    if (!g || g.over || !g.seatOf(userId)) throw new UserError('Game not found');
+    const seat = g?.seatOf(userId);
+    if (!g || g.over || !seat) throw new UserError('Game not found');
+    // Players who left or were removed can no longer act in (or react to) the game.
+    if (g.state.players.find((p) => p.color === seat.color)?.out) throw new UserError('You left this game');
     return g;
   }
 
@@ -210,6 +215,12 @@ export class Hub {
     });
     this.handle(socket, 'room:join', (u, req) => {
       if (!isObj(req)) throw new UserError('Bad request');
+      // Throttle joins so private room codes cannot be guessed by brute force.
+      const now = Date.now();
+      const j = this.joinTries.get(u);
+      const tries = j && now - j.since < 10_000 ? j : { n: 0, since: now };
+      if (tries.n >= 6) throw new UserError('Too many attempts, wait a few seconds');
+      this.joinTries.set(u, { n: tries.n + 1, since: tries.since });
       return { room: this.rooms.join(u, req.code) };
     });
     this.handle(socket, 'room:leave', (u) => { this.rooms.leave(u); });
@@ -287,7 +298,13 @@ export class Hub {
     if (!isObj(req) || typeof req.id !== 'string' || req.id.length > 64) throw new UserError('Bad request');
     if (req.game !== 'ludo' && req.game !== 'snakes') throw new UserError('Bad request');
     if (req.mode !== 'bots' && req.mode !== 'pass') throw new UserError('Bad request');
-    if (!Array.isArray(req.seats) || req.seats.length > 4 || !isObj(req.state)) throw new UserError('Bad request');
+    if (!validOfflineReport(req)) throw new UserError('Bad request');
+    // Flood guard: phones send at most ~3 reports a second; ignore anything far beyond that.
+    const now = Date.now();
+    const rate = this.offlineAt.get(userId);
+    const win = rate && now - rate.since < 1000 ? rate : { n: 0, since: now };
+    if (win.n >= 20) return;
+    this.offlineAt.set(userId, { n: win.n + 1, since: win.since });
     const key = `${userId}|${req.id}`;
     const prev = this.offline.get(key);
     if (!prev && [...this.offline.values()].filter((e) => e.userId === userId).length >= 3) {
@@ -333,7 +350,32 @@ export class Hub {
     this.rooms.close();
     for (const t of this.cleanupTimers) clearTimeout(t);
     for (const g of this.games.values()) g.dispose();
+    // Games live in memory: give back the entry fees of every game that did not finish.
+    try {
+      const n = this.db.refundOpenGames();
+      if (n) this.cfg.log(`refunded entry fees of ${n} unfinished game(s)`);
+    } catch (e) { this.cfg.log('refund on close failed', e); }
   }
+}
+
+const COLORS = new Set(['red', 'green', 'yellow', 'blue']);
+const isInt = (v: unknown, lo: number, hi: number) => Number.isInteger(v) && (v as number) >= lo && (v as number) <= hi;
+
+/** Offline reports come from any phone: check the shape the owner app renders, so a bad one cannot break it. */
+function validOfflineReport(r: Record<string, unknown>): boolean {
+  const seats = r.seats;
+  const st = r.state;
+  if (!Array.isArray(seats) || seats.length < 2 || seats.length > 4 || !isObj(st)) return false;
+  if (!seats.every((x) => isObj(x) && COLORS.has(x.color as string) && typeof x.name === 'string' && x.name.length <= 40)) return false;
+  const players = st.players;
+  if (!Array.isArray(players) || players.length !== seats.length) return false;
+  if (!isInt(st.turn, 0, players.length - 1) || !isInt(st.seq, 0, 1e9) || !Array.isArray(st.ranking)) return false;
+  if (!['roll', 'move', 'over'].includes(st.phase as string)) return false;
+  return players.every((p) => {
+    if (!isObj(p) || !COLORS.has(p.color as string)) return false;
+    if (r.game === 'snakes') return isInt(p.pos, 0, 100);
+    return Array.isArray(p.tokens) && p.tokens.length === 4 && p.tokens.every((t) => isInt(t, -1, 56));
+  });
 }
 
 export function isObj(v: unknown): v is Record<string, unknown> {

@@ -6,13 +6,14 @@
 import type { Namespace, Socket } from 'socket.io';
 import {
   type Color, type DiceOverride, type GlobalTheme, type OwnerClientToServer, type OwnerConfigPatch, type OwnerServerToClient,
-  type OwnerSnapshot, type OwnerUser,
+  type OwnerSnapshot, type OwnerStats, type OwnerUser,
   ALL_COLORS, BOARD_THEMES, DICE_SKINS, RuleError, levelForXp,
 } from '@ludo/engine';
 import type { Hub } from './hub.js';
 import { isObj } from './hub.js';
 import { InsufficientCoins, type UserRow } from './db.js';
 import { sameKey } from './auth.js';
+import { clientIp } from './config.js';
 import { serverConfig } from './http.js';
 import { sanitizeName } from './profile.js';
 import { UserError } from './errors.js';
@@ -47,15 +48,19 @@ export function applySavedConfig(hub: Pick<Hub, 'cfg' | 'db'>): void {
   if (saved.turnSeconds) hub.cfg.turnSeconds = saved.turnSeconds;
 }
 
+const ONLINE_CONTROL_OFF = 'Online match control is turned off on this server (ONLINE_GAME_CONTROL)';
+
 export class OwnerControl {
   readonly ns: OwnerNs;
   private failures = new Map<string, { n: number; since: number }>();
+  private statsCache: { at: number; stats: OwnerStats } | null = null;
 
   constructor(private hub: Hub) {
     this.ns = hub.io.of('/admin') as unknown as OwnerNs;
     this.ns.use((socket, next) => {
-      const ip = socket.handshake.address;
+      const ip = clientIp(hub.cfg, socket.handshake.headers, socket.handshake.address);
       const now = Date.now();
+      for (const [k, v] of this.failures) if (now - v.since >= 60_000) this.failures.delete(k);
       const f = this.failures.get(ip);
       const tries = f && now - f.since < 60_000 ? f : { n: 0, since: now };
       if (tries.n >= 10) return next(new Error('too many attempts'));
@@ -87,9 +92,18 @@ export class OwnerControl {
     const hub = this.hub;
     const now = Date.now();
     for (const [k, e] of hub.offline) if (now - e.updatedAt > OFFLINE_STALE_MS) hub.offline.delete(k);
+    // DB totals change slowly: refresh them every few seconds, not on every 1 s poll.
+    if (!this.statsCache || now - this.statsCache.at > 5000) {
+      const day = new Date(now);
+      day.setHours(0, 0, 0, 0);
+      const s = hub.db.stats(day.getTime());
+      this.statsCache = { at: now, stats: { ...s, top: s.top.map((u) => this.user(u)), newest: s.newest.map((u) => this.user(u)) } };
+    }
     return {
       now,
       online: hub.sockets.size,
+      onlineControl: hub.cfg.onlineGameControl,
+      stats: this.statsCache.stats,
       games: [...hub.games.values()].filter((g) => !g.over).map((g) => ({
         gameId: g.id, stake: g.stake, prizes: g.prizes, seats: g.seats, state: g.state, deadline: g.deadline, overrides: g.overridesView(),
       })),
@@ -129,6 +143,7 @@ export class OwnerControl {
     this.handle(socket, 'owner:snapshot', () => ({ snapshot: this.snapshot() }));
 
     this.handle(socket, 'owner:dice', (req) => {
+      if (!hub.cfg.onlineGameControl) throw new UserError(ONLINE_CONTROL_OFF);
       if (!isObj(req) || typeof req.gameId !== 'string') throw new UserError('Bad request');
       const g = hub.games.get(req.gameId);
       if (!g || g.over) throw new UserError('Game not found');
@@ -150,6 +165,7 @@ export class OwnerControl {
     });
 
     this.handle(socket, 'owner:endGame', (req) => {
+      if (!hub.cfg.onlineGameControl) throw new UserError(ONLINE_CONTROL_OFF);
       if (!isObj(req) || typeof req.gameId !== 'string') throw new UserError('Bad request');
       const g = hub.games.get(req.gameId);
       if (!g || g.over) throw new UserError('Game not found');

@@ -214,3 +214,22 @@ describe('account deletion', () => {
     expect(b.profile.coins).toBe(1000);
   });
 });
+
+describe('unfinished games', () => {
+  it('refunds entry fees when the server stops mid-game', async () => {
+    srv = await startServer({ botFillSeconds: 60 });
+    const a = await player(srv.url);
+    const b = await player(srv.url);
+    const before = srv.app.db.getUser(a.id)!.coins;
+    const start = once(a.s, 'game:start');
+    await emitAck(a.s, 'queue:join', { players: 2, stake: 250 });
+    await emitAck(b.s, 'queue:join', { players: 2, stake: 250 });
+    await start;
+    expect(srv.app.db.getUser(a.id)!.coins).toBe(before - 250);
+    // Server stops before the game is settled: the ledger must give the stake back.
+    expect(srv.app.db.refundOpenGames()).toBe(1);
+    expect(srv.app.db.getUser(a.id)!.coins).toBe(before);
+    expect(srv.app.db.getUser(b.id)!.coins).toBe(before);
+    expect(srv.app.db.refundOpenGames()).toBe(0);
+  });
+});
