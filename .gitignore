@@ -29,3 +29,4 @@ admin/android/capacitor-cordova-android-plugins/
 admin/android/app/src/main/res/xml/config.xml
 admin/android/app/src/main/assets/capacitor.config.json
 admin/android/app/src/main/assets/capacitor.plugins.json
+release/
